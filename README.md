@@ -1,6 +1,6 @@
-# SubScopeMon
+# SubScopeMongo
 
-**SubScopeMon** is a Python-based command-line tool (like SubScope) but in MongoDB database.
+**SubScopeMongo** is a Python-based command-line tool (like SubScope) but in MongoDB database.
 
 ## Requirements
 - Python 3.x
