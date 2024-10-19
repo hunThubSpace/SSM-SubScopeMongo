@@ -17,20 +17,20 @@
 3. Clone the repository:
 
    ```bash
-   git clone https://github.com/hunThubSpace/SubScopeMon.git && cd SubScopeMon
+   git clone https://github.com/hunThubSpace/SubScopeMongo.git && cd SubScopeMongo
    ```
    
 4. Run the script:
 
     ```bash
-    chmod +x subscopemon.py
-    ./subscopeMon.py -h
+    chmod +x subscopemongo.py
+    ./subscopemongo.py -h
     ```
     
     This will display usage information:
 
     ```
-   usage: ./subscopemon.py [-h] {program,domain,subdomain,url,ip} ...
+   usage: ./subscopemongo.py [-h] {program,domain,subdomain,url,ip} ...
    
    Manage programs, domains, subdomains, and IPs
    
