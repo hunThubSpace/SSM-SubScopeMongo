@@ -10,9 +10,9 @@
 1. Install MongoDB (https://www.mongodb.com/docs/manual/installation/)
 2. Install pymongo
   
-  ```bash
-  pip install pymongo
-  ```
+    ```bash
+    pip install pymongo
+    ```
 
 3. Clone the repository:
 
