@@ -11,8 +11,9 @@ from datetime import datetime, timedelta
 
 colorama.init()
 
-# Connect to MongoDB
-client = MongoClient('localhost', 27017)  # Adjust as needed
+client = MongoClient('mongodb://user:pass@localhost:27017/scopes')
+
+#client = MongoClient('localhost', 27017)  # Adjust as needed
 db = client['scopes']
 programs_collection = db['programs']
 domains_collection = db['domains']
@@ -471,9 +472,9 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
                     cdn_status=None, ip=None, cdn_name=None, create_time=None, update_time=None, count=False, stats_source=False,
                     stats_scope=False, stats_cdn_status=False, stats_cdn_name=False, stats_resolved=False, stats_ip_address=False,
                     stats_program=False, stats_domain=False, stats_created_at=False, stats_updated_at=False):
-    
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Check if program exists if specified
     if program != '*':
         if programs_collection.count_documents({"program": program}) == 0:
@@ -523,82 +524,95 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
     # Convert cursor to list
     subdomains = list(subdomains_cursor)
 
-    # Handle counting records
+    # Initialize filtered_subdomains
+    filtered_subdomains = subdomains  
+
+    # Handle counting records based on filters
     if count:
-        print(len(subdomains))
+        if source_only and sources:
+            filtered_subdomains = [
+                sub for sub in subdomains 
+                if sub.get('source', '').strip() == sources[0]  # Exact match for source
+            ]
+        else:
+            if sources:
+                filtered_subdomains = [
+                    sub for sub in subdomains 
+                    if any(source in sub.get('source', '').split(',') for source in sources)
+                ]
+        print(len(filtered_subdomains))
         return
 
-    # Filter results by source if provided
-    filtered_subdomains = []
-    if subdomains:
-        if sources:
-            for sub in subdomains:
-                subdomain_sources = [src.strip() for src in sub.get('source', '').split(',')]
-                if any(source in subdomain_sources for source in sources):
-                    filtered_subdomains.append(sub)
+    # Further filtering for brief output if sources are provided
+    if sources:
+        if source_only:
+            filtered_subdomains = [
+                sub for sub in filtered_subdomains 
+                if sub.get('source', '').strip() == sources[0]  # Exact match for source
+            ]
         else:
-            filtered_subdomains = subdomains
+            filtered_subdomains = [
+                sub for sub in filtered_subdomains 
+                if any(source in sub.get('source', '').split(',') for source in sources)
+            ]
 
-        # Further filter for --source-only
-        if source_only and sources:
-            filtered_subdomains = [sub for sub in filtered_subdomains if sub.get('source', '').strip() == sources[0]]
+   
+    # Statistics calculations
+    def print_statistics(filtered, key_name, title):
+        count_map = {}
+        for sub in filtered:
+            key_value = sub.get(key_name)
+            if key_value:
+                key_value = key_value.strip() if isinstance(key_value, str) else key_value
+                count_map[key_value] = count_map.get(key_value, 0) + 1
 
-        # Statistics calculations
-        def print_statistics(filtered, key_name, title):
-            count_map = {}
-            for sub in filtered:
-                key_value = sub.get(key_name)
-                if key_value:
-                    key_value = key_value.strip() if isinstance(key_value, str) else key_value
-                    count_map[key_value] = count_map.get(key_value, 0) + 1
+        total_count = len(filtered)
+        print(f"{title} statistics:")
+        for key, count in count_map.items():
+            percentage = (count / total_count) * 100 if total_count > 0 else 0
+            print(f"{key}: {count} ({percentage:.2f}%)")
 
-            total_count = len(filtered)
-            print(f"{title} statistics:")
-            for key, count in count_map.items():
-                percentage = (count / total_count) * 100 if total_count > 0 else 0
-                print(f"{key}: {count} ({percentage:.2f}%)")
+    # Output statistics if requested
+    if stats_source:
+        print_statistics(filtered_subdomains, 'source', "Source")
+        return
+    if stats_scope:
+        print_statistics(filtered_subdomains, 'scope', "Scope")
+        return
+    if stats_cdn_status:
+        print_statistics(filtered_subdomains, 'cdn_status', "CDN Status")
+        return
+    if stats_cdn_name:
+        print_statistics(filtered_subdomains, 'cdn_name', "CDN Name")
+        return
+    if stats_resolved:
+        print_statistics(filtered_subdomains, 'resolved', "Resolved Status")
+        return
+    if stats_ip_address:
+        print_statistics(filtered_subdomains, 'ip_address', "IP Address")
+        return
+    if stats_program:
+        print_statistics(filtered_subdomains, 'program', "Program")
+        return
+    if stats_domain:
+        print_statistics(filtered_subdomains, 'domain', "Domain")
+        return
+    if stats_created_at:
+        print_statistics(filtered_subdomains, 'created_at', "Created At")
+        return
+    if stats_updated_at:
+        print_statistics(filtered_subdomains, 'updated_at', "Updated At")
+        return
 
-        # Output statistics if requested
-        if stats_source:
-            print_statistics(filtered_subdomains, 'source', "Source")
-            return
-        if stats_scope:
-            print_statistics(filtered_subdomains, 'scope', "Scope")
-            return
-        if stats_cdn_status:
-            print_statistics(filtered_subdomains, 'cdn_status', "CDN Status")
-            return
-        if stats_cdn_name:
-            print_statistics(filtered_subdomains, 'cdn_name', "CDN Name")
-            return
-        if stats_resolved:
-            print_statistics(filtered_subdomains, 'resolved', "Resolved Status")
-            return
-        if stats_ip_address:
-            print_statistics(filtered_subdomains, 'ip_address', "IP Address")
-            return
-        if stats_program:
-            print_statistics(filtered_subdomains, 'program', "Program")
-            return
-        if stats_domain:
-            print_statistics(filtered_subdomains, 'domain', "Domain")
-            return
-        if stats_created_at:
-            print_statistics(filtered_subdomains, 'created_at', "Created At")
-            return
-        if stats_updated_at:
-            print_statistics(filtered_subdomains, 'updated_at', "Updated At")
-            return
-
-        # Output results
-        if filtered_subdomains:
+    # Output results in brief mode
+    if filtered_subdomains:
+        if brief:
+            print("\n".join(sub['subdomain'] for sub in filtered_subdomains))
+        else:
             for sub in filtered_subdomains:
                 sub.pop('_id', None)  # Remove _id field
+            print(json.dumps(filtered_subdomains, indent=4))
 
-            if brief:
-                print("\n".join(sub['subdomain'] for sub in filtered_subdomains))
-            else:
-                print(json.dumps(filtered_subdomains, indent=4))
 
 def delete_subdomain(sub='*', domain='*', program='*', scope=None, source=None, resolved=None, ip_address=None, cdn_status=None, cdn_name=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
