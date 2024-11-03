@@ -1,19 +1,63 @@
 #!/usr/bin/python3
 
+import re
 import os
 import json
 import argparse
 import colorama
-from pymongo import MongoClient
 from datetime import datetime
-from colorama import Fore, Style
+from pymongo import MongoClient # type: ignore
+from colorama import Fore, Style, Back
 from datetime import datetime, timedelta
 
 colorama.init()
 
-client = MongoClient('mongodb://user:pass@localhost:27017/scopes')
+def setup():
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        # install mongodb
+        com=f"sudo apt update &> /dev/null && sudo apt-get install gnupg curl &> /dev/null"
+        os.system(com)
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}gnupg and curl{Style.RESET_ALL} installed")
 
+        com=f"curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor &> /dev/null"
+        os.system(com)        
+        com=f'echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list &> /dev/null'
+        os.system(com)
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}mongo key{Style.RESET_ALL} created")
+
+        com=f"sudo apt-get update &> /dev/null && sudo apt-get install -y mongodb-org &> /dev/null"
+        os.system(com)
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}mongodb{Style.RESET_ALL} installed")
+        
+        com=f"sudo systemctl start mongod &> /dev/null; sudo systemctl daemon-reload &> /dev/null; sudo systemctl enable mongod &> /dev/null"
+        os.system(com)
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}mongodb service{Style.RESET_ALL} started")
+
+        # install pymongo
+        com=f"pip install pymongo bson --break-system-packages &> /dev/null"
+        os.system(com)
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}pymongo{Style.RESET_ALL} installed")
+        
+        # create database
+        client = MongoClient('localhost', 27017)
+        db = client['scopes']
+        
+        # add authentication
+        com = (
+            'mongo scopes --eval '
+            '\'db.createUser({ user: "user", pwd: "password", roles: [{ role: "readWrite", db: "scopes" }] })\''
+        )
+        os.system(com)
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}scopes database{Style.RESET_ALL} has authentication")
+
+        # note > mongorestore --host localhost --port 27017 --db scopes scopes --username user --password 'password' --authenticationDatabase scopes
+    except Exception as E:
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| installing | {E}")
+
+client = MongoClient('mongodb://user:password@localhost:27017/scopes')
 #client = MongoClient('localhost', 27017)  # Adjust as needed
+
 db = client['scopes']
 programs_collection = db['programs']
 domains_collection = db['domains']
@@ -22,87 +66,80 @@ urls_collection = db['urls']
 cidrs_collection = db['cidrs']
 
 def update_counts_program(program):
-    counts_program = {
-        'domains': domains_collection.count_documents({"program": program}),
-        'subdomains': subdomains_collection.count_documents({"program": program}),
-        'urls': urls_collection.count_documents({"program": program}),
-        'ips': cidrs_collection.count_documents({"program": program}),
-    }
-    
-    programs_collection.update_one(
-        {"program": program},
-        {
-            "$set": {
-                "domains": counts_program['domains'],
-                "subdomains": counts_program['subdomains'],
-                "urls": counts_program['urls'],
-                "ips": counts_program['ips']
-            }
-        }
-    )
+    collections = {'domains': domains_collection,'subdomains': subdomains_collection,'urls': urls_collection,'ips': cidrs_collection,}
+    counts_program = {key: collection.count_documents({"program": program}) for key, collection in collections.items()}
+    programs_collection.update_one({"program": program},{"$set": counts_program})
 
 def update_counts_domain(program, domain):
-    counts_domain = {
-        'subdomains': subdomains_collection.count_documents({"program": program, "domain": domain}),
-        'urls': urls_collection.count_documents({"program": program, "domain": domain}),
-    }
-    
-    domains_collection.update_one(
-        {"program": program, "domain": domain},
-        {
-            "$set": {
-                "subdomains": counts_domain['subdomains'],
-                "urls": counts_domain['urls']
-            }
-        }
-    )
+    collections = {'subdomains': subdomains_collection,'urls': urls_collection,}
+    counts_domain = {key: collection.count_documents({"program": program, "domain": domain}) for key, collection in collections.items()}
+    domains_collection.update_one({"program": program, "domain": domain},{"$set": counts_domain})
 
 def update_counts_subdomain(program, domain, subdomain):
-    counts_subdomain = {
-        'urls': urls_collection.count_documents({"program": program, "domain": domain, "subdomain": subdomain}),
-    }
-    
-    subdomains_collection.update_one(
-        {"program": program, "domain": domain, "subdomain": subdomain},
-        {
-            "$set": {
-                "urls": counts_subdomain['urls']
-            }
-        }
-    )
+    counts_subdomain = {'urls': urls_collection.count_documents({"program": program, "domain": domain, "subdomain": subdomain}),}
+    subdomains_collection.update_one({"program": program, "domain": domain, "subdomain": subdomain},{"$set": counts_subdomain})
 
 def add_program(program):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        # Check if the program already exists
-        exists = programs_collection.count_documents({"program": program}) > 0
-
-        if exists:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} already exists")
+    # Check if program is a file path
+    if isinstance(program, str):
+        try:
+            # Attempt to open the program as a file
+            with open(program, 'r') as file:
+                programs = [line.strip() for line in file if line.strip()]  # Read and strip empty lines
+        except FileNotFoundError:
+            # If it's not a file, treat it as a single program
+            programs = [program]
+        except Exception as e:
+            print(f"Error reading from file: {e}")
             return
+    elif isinstance(program, list):
+        programs = program
+    else:
+        raise ValueError("Input must be a program name (str) or a path to a file (str) or a list of programs.")
 
-        # Count related documents
-        domains_counts = domains_collection.count_documents({"program": program})
-        subdomains_counts = subdomains_collection.count_documents({"program": program})
-        urls_counts = urls_collection.count_documents({"program": program})
-        ips_counts = cidrs_collection.count_documents({"program": program})
+    try:
+        # Prepare a list for new program documents
+        new_programs = []
 
-        # Insert the new program document
-        program_document = {
-            "program": program,
-            "domains": domains_counts,
-            "subdomains": subdomains_counts,
-            "urls": urls_counts,
-            "ips": ips_counts,
-            "created_at": timestamp
-        }
-        
-        programs_collection.insert_one(program_document)
-        print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | adding program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} created")
+        for program in programs:
+            # Check if the program already exists
+            exists = programs_collection.count_documents({"program": program}) > 0
+
+            if exists:
+                print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} already exists")
+                continue  # Skip this program if it already exists
+
+            # Count related documents
+            collections = {
+                'domains': domains_collection,
+                'subdomains': subdomains_collection,
+                'urls': urls_collection,
+                'ips': cidrs_collection,
+            }
+
+            counts = {key: collection.count_documents({"program": program}) for key, collection in collections.items()}
+
+            # Prepare the new program document
+            program_document = {
+                "program": program,
+                "domains": counts['domains'],
+                "subdomains": counts['subdomains'],
+                "urls": counts['urls'],
+                "ips": counts['ips'],
+                "created_at": timestamp
+            }
+            new_programs.append(program_document)
+
+        # Insert all new program documents at once
+        if new_programs:
+            programs_collection.insert_many(new_programs)
+            program_names = ', '.join(program['program'] for program in new_programs)  # Get program names
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding program | added {Fore.BLUE}{Style.BRIGHT}{program_names}{Style.RESET_ALL} program(s)")
 
     except Exception as e:
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding program | error: {e}")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding programs | error: {e}")
 
 def list_programs(program='*', brief=False, count=False):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # For potential logging
@@ -115,7 +152,7 @@ def list_programs(program='*', brief=False, count=False):
 
         # If no programs exist, display a message
         if not programs:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | listing program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} not found")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| listing program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} not found")
             return
 
         # Handle counting records
@@ -167,11 +204,11 @@ def delete_program(program, delete_all=False):
                 domains_collection.delete_many({})
                 programs_collection.delete_many({})
                 
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting all programs | all programs with program: {program_count}, domains: {domain_count}, subdomains: {subdomain_count}, urls: {url_count}, ips: {ip_count}")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting all programs | all programs with program: {program_count}, domains: {domain_count}, subdomains: {subdomain_count}, urls: {url_count}, ips: {ip_count}")
             else:
                 # Only delete all programs
                 programs_collection.delete_many({})
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting programs | deleted all programs")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting programs | deleted all programs")
         
         else:
             if delete_all:
@@ -184,56 +221,58 @@ def delete_program(program, delete_all=False):
                 domains_collection.delete_many({"program": program})
                 programs_collection.delete_one({"program": program})
 
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting all program of {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} | program: {program_count}, domains: {domain_count}, subdomains: {subdomain_count}, urls: {url_count}, ips: {ip_count}")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting all program of {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} | program: {program_count}, domains: {domain_count}, subdomains: {subdomain_count}, urls: {url_count}, ips: {ip_count}")
                 return
 
             # Check if the program exists
             if programs_collection.count_documents({"program": program}) == 0:
-                print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} not found")
+                print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} not found")
                 return
             else:
                 programs_collection.delete_one({"program": program})
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} deleted")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting program | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} deleted")
 
     except Exception as e:
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting program | error: {e}")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting program | error: {e}")
 
 def add_domain(domain_or_file, program, scope=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check if the program exists
     if programs_collection.count_documents({"program": program}) == 0:
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding domain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding domain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
         return
 
-    # Check if the input is a file
+    # Determine if the input is a file or a single domain
     if os.path.isfile(domain_or_file):
         with open(domain_or_file, 'r') as file:
             domains = [line.strip() for line in file if line.strip()]
     else:
         domains = [domain_or_file]
 
+    new_domains = []
+    
     for domain in domains:
         existing_domain = domains_collection.find_one({"domain": domain, "program": program})
-        
+
         subdomains_counts = subdomains_collection.count_documents({"domain": domain})
         urls_counts = urls_collection.count_documents({"domain": domain})
 
         if existing_domain:
             current_scope = existing_domain.get("scope")  # Get current scope
 
-            # Only update the scope if a new scope is provided
+            # Update the scope if a new one is provided and differs
             if scope is not None and current_scope != scope:
                 domains_collection.update_one(
                     {"domain": domain, "program": program},
                     {"$set": {"scope": scope, "updated_at": timestamp}}
                 )
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | updating domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} updated to {scope}")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| updating domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} updated to {scope}")
             else:
                 print(f"{timestamp} | {Fore.YELLOW}notice{Style.RESET_ALL} | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} unchanged")
         else:
             new_scope = scope if scope is not None else 'inscope'
-            domains_collection.insert_one({
+            new_domains.append({
                 "domain": domain,
                 "program": program,
                 "scope": new_scope,
@@ -242,9 +281,14 @@ def add_domain(domain_or_file, program, scope=None):
                 "created_at": timestamp,
                 "updated_at": timestamp
             })
-            
-            update_counts_program(program)
-            print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | adding domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} added to program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
+
+    if new_domains:
+        # Insert all new domains at once
+        domains_collection.insert_many(new_domains)
+        update_counts_program(program)  # Update counts for the program after insertion
+        
+        for domain in new_domains:
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding domain | domain {Fore.BLUE}{Style.BRIGHT}{domain['domain']}{Style.RESET_ALL} added to program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
 
 def list_domains(domain='*', program='*', brief=False, count=False, scope=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # For potential logging
@@ -252,7 +296,7 @@ def list_domains(domain='*', program='*', brief=False, count=False, scope=None):
     # Check if the program exists if a specific program is requested
     if program != '*':
         if programs_collection.count_documents({"program": program}) == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | listing domain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| listing domain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
             return
 
         query = {"program": program}
@@ -277,7 +321,7 @@ def list_domains(domain='*', program='*', brief=False, count=False, scope=None):
     }))
 
     if not domains:
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | listing domain | no domains found")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| listing domain | no domains found")
         return
 
     if count:
@@ -296,7 +340,7 @@ def delete_domain(domain='*', program='*', scope=None):
 
     if program != '*':
         if programs_collection.count_documents({"program": program}) == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting domain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting domain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
             return
 
     if domain == '*':
@@ -318,10 +362,10 @@ def delete_domain(domain='*', program='*', scope=None):
             domains_collection.delete_many({"scope": scope})
 
         if counts['domains'] == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting domain | domain table is empty")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting domain | domain table is empty")
         else:
             update_counts_program(program)
-            print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{counts['domains']}{Style.RESET_ALL} domains, {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains, and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{counts['domains']}{Style.RESET_ALL} domains, {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains, and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
     
     else:
         if program == '*':
@@ -343,10 +387,10 @@ def delete_domain(domain='*', program='*', scope=None):
                 domains_collection.delete_many({"domain": domain, "scope": scope})
 
             if counts['domains'] == 0:
-                print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist")
+                print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist")
             else:
                 update_counts_program(program)
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} with {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} with {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
         
         else:
             # Deleting records in a specific program
@@ -365,11 +409,11 @@ def delete_domain(domain='*', program='*', scope=None):
                 domains_collection.delete_many({"domain": domain, "program": program, "scope": scope})
 
             if counts['domains'] == 0:
-                print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist")
+                print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting domain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist")
             else:
                 update_counts_program(program)
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} from {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
-                
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} from {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
+
 def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=None, scope=None, resolved=None,
                   ip_address=None, cdn_status=None, cdn_name=None, unip=None, uncdn_name=None):
     
@@ -377,12 +421,12 @@ def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=No
 
     # Check if the program exists
     if programs_collection.count_documents({"program": program}) == 0:
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding subdomain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding subdomain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
         return
 
     # Check if the domain exists
     if domains_collection.count_documents({"domain": domain, "program": program}) == 0:
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding subdomain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding subdomain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
         return
 
     # Check if the input is a file
@@ -392,6 +436,8 @@ def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=No
     else:
         subdomains = [subdomain_or_file]
 
+    new_subdomains = []  # List to hold new subdomain entries
+    
     for subdomain in subdomains:
         existing = subdomains_collection.find_one({"subdomain": subdomain, "domain": domain, "program": program})
 
@@ -443,13 +489,14 @@ def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=No
             if update_fields:
                 update_fields['updated_at'] = timestamp
                 subdomains_collection.update_one({"subdomain": subdomain, "domain": domain, "program": program}, {"$set": update_fields})
-                print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | updating subdomain | subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with updates: {Fore.BLUE}{Style.BRIGHT}{update_fields}{Style.RESET_ALL}")
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| updating subdomain | subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with updates: {Fore.BLUE}{Style.BRIGHT}{update_fields}{Style.RESET_ALL}")
             else:
-                print(f"{timestamp} | {Fore.YELLOW}info{Style.RESET_ALL} | updating subdomain | No updates for subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
+                print(f"{timestamp} |{Back.YELLOW}{Fore.BLACK} apprise {Style.RESET_ALL}| updating subdomain | No updates for subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
 
         else:
+            # Prepare new subdomain entry
             new_source_str = ", ".join(sources) if sources else ""
-            subdomains_collection.insert_one({
+            new_subdomains.append({
                 "subdomain": subdomain,
                 "domain": domain,
                 "program": program,
@@ -463,10 +510,17 @@ def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=No
                 "created_at": timestamp,
                 "updated_at": timestamp
             })
-            
-            update_counts_program(program)
-            update_counts_domain(program, domain)
-            print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | adding subdomain | Subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} added to domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.BRIGHT} with sources: {Fore.BLUE}{Style.BRIGHT}{new_source_str}{Style.RESET_ALL}, scope: {Fore.BLUE}{Style.BRIGHT}{scope}{Style.RESET_ALL}, resolved: {Fore.BLUE}{Style.BRIGHT}{resolved}{Style.RESET_ALL}, IP: {Fore.BLUE}{Style.BRIGHT}{ip_address}{Style.RESET_ALL}, cdn_status: {Fore.BLUE}{Style.BRIGHT}{cdn_status}{Style.RESET_ALL}, CDN Name: {Fore.BLUE}{Style.BRIGHT}{cdn_name}{Style.RESET_ALL}")
+
+    if new_subdomains:
+        # Insert all new subdomains at once
+        subdomains_collection.insert_many(new_subdomains)
+        
+        # Update counts for the program and domain after insertion
+        update_counts_program(program)
+        update_counts_domain(program, domain)
+
+        for subdomain in new_subdomains:
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding subdomain | Subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain['subdomain']}{Style.RESET_ALL} added to domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.BRIGHT} with sources: {Fore.BLUE}{Style.BRIGHT}{subdomain['source']}{Style.RESET_ALL}, scope: {Fore.BLUE}{Style.BRIGHT}{subdomain['scope']}{Style.RESET_ALL}, resolved: {Fore.BLUE}{Style.BRIGHT}{subdomain['resolved']}{Style.RESET_ALL}, IP: {Fore.BLUE}{Style.BRIGHT}{subdomain['ip_address']}{Style.RESET_ALL}, cdn_status: {Fore.BLUE}{Style.BRIGHT}{subdomain['cdn_status']}{Style.RESET_ALL}, CDN Name: {Fore.BLUE}{Style.BRIGHT}{subdomain['cdn_name']}{Style.RESET_ALL}")
 
 def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=None, resolved=None, brief=False, source_only=False,
                     cdn_status=None, ip=None, cdn_name=None, create_time=None, update_time=None, count=False, stats_source=False,
@@ -478,7 +532,7 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
     # Check if program exists if specified
     if program != '*':
         if programs_collection.count_documents({"program": program}) == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | listing subdomain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| listing subdomain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
             return
 
     # Build filters
@@ -506,7 +560,7 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
             start_time, end_time = parse_time_range(create_time)
             filters['created_at'] = {"$gte": start_time, "$lte": end_time}
         except Exception as e:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | Invalid create_time format: {e}")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| Invalid create_time format: {e}")
             return
 
     # Handle update_time filtering
@@ -515,7 +569,7 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
             start_time, end_time = parse_time_range(update_time)
             filters['updated_at'] = {"$gte": start_time, "$lte": end_time}
         except Exception as e:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | Invalid update_time format: {e}")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| Invalid update_time format: {e}")
             return
 
     # Execute the query
@@ -545,6 +599,9 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
 
     # Further filtering for brief output if sources are provided
     if sources:
+        # Normalize the sources input to a set for efficient lookup
+        source_set = set(src.strip() for src in sources)
+        
         if source_only:
             filtered_subdomains = [
                 sub for sub in filtered_subdomains 
@@ -553,7 +610,7 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
         else:
             filtered_subdomains = [
                 sub for sub in filtered_subdomains 
-                if any(source in sub.get('source', '').split(',') for source in sources)
+                if any(src.strip() in source_set for src in sub.get('source', '').split(','))
             ]
 
    
@@ -613,26 +670,25 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
                 sub.pop('_id', None)  # Remove _id field
             print(json.dumps(filtered_subdomains, indent=4))
 
-
 def delete_subdomain(sub='*', domain='*', program='*', scope=None, source=None, resolved=None, ip_address=None, cdn_status=None, cdn_name=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check if program exists
     if program != '*':
         if programs_collection.count_documents({"program": program}) == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting subdomain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting subdomain | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
             return
 
     # Check if domain exists
     if domain != '*':
         if domains_collection.count_documents({"domain": domain}) == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting subdomain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting subdomain | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist")
             return
 
     # Check if subdomain exists before deletion
     if sub != '*':
         if subdomains_collection.count_documents({"subdomain": sub, "domain": domain, "program": program}) == 0:
-            print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | deleting subdomain | subdomain {Fore.BLUE}{Style.BRIGHT}{sub}{Style.RESET_ALL} does not exist in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} and program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting subdomain | subdomain {Fore.BLUE}{Style.BRIGHT}{sub}{Style.RESET_ALL} does not exist in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} and program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
             return
 
     # Build the filter message to display which filters were used
@@ -698,7 +754,7 @@ def delete_subdomain(sub='*', domain='*', program='*', scope=None, source=None, 
         if total_deleted > 0:
             update_counts_program(program)
             update_counts_domain(program, domain)
-            print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting subdomain | deleted {total_deleted} matching entries from {Fore.BLUE}{Style.BRIGHT}subdomains{Style.RESET_ALL} collection with filters: {Fore.BLUE}{Style.BRIGHT}{filter_msg}{Style.RESET_ALL}")
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting subdomain | deleted {total_deleted} matching entries from {Fore.BLUE}{Style.BRIGHT}subdomains{Style.RESET_ALL} collection with filters: {Fore.BLUE}{Style.BRIGHT}{filter_msg}{Style.RESET_ALL}")
 
     else:
         # Delete a single subdomain with optional filters
@@ -737,10 +793,10 @@ def delete_subdomain(sub='*', domain='*', program='*', scope=None, source=None, 
         if total_deleted > 0:
             update_counts_program(program)
             update_counts_domain(program, domain)
-            print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | deleting subdomain | deleted {total_deleted} matching entry from {Fore.BLUE}{Style.BRIGHT}subdomains{Style.RESET_ALL} collection with filters: {Fore.BLUE}{Style.BRIGHT}{filter_msg}{Style.RESET_ALL}")
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting subdomain | deleted {total_deleted} matching entry from {Fore.BLUE}{Style.BRIGHT}subdomains{Style.RESET_ALL} collection with filters: {Fore.BLUE}{Style.BRIGHT}{filter_msg}{Style.RESET_ALL}")
 
     if total_deleted == 0:
-        print(f"{timestamp} | {Fore.YELLOW}info{Style.RESET_ALL} | deleting subdomain | no subdomains were deleted with filters: {Fore.BLUE}{Style.BRIGHT}{filter_msg}{Style.RESET_ALL}")
+        print(f"{timestamp} |{Back.YELLOW}{Fore.BLACK} apprise {Style.RESET_ALL}| deleting subdomain | no subdomains were deleted with filters: {Fore.BLUE}{Style.BRIGHT}{filter_msg}{Style.RESET_ALL}")
 
 def add_url(url, subdomain, domain, program, scheme=None, method=None, port=None, status_code=None, scope=None,
             ip_address=None, cdn_status=None, cdn_name=None, title=None, webserver=None, webtech=None, cname=None,
@@ -749,30 +805,28 @@ def add_url(url, subdomain, domain, program, scheme=None, method=None, port=None
 
     # Check if the program exists
     if not programs_collection.find_one({"program": program}):
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding url | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding url | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
         return
 
     # Check if the domain exists
     if not domains_collection.find_one({"domain": domain, "program": program}):
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding url | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist in program '{program}'")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding url | domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist in program '{program}'")
         return
 
     # Check if the subdomain exists
     if not subdomains_collection.find_one({"subdomain": subdomain, "domain": domain, "program": program}):
-        print(f"{timestamp} | {Fore.RED}error{Style.RESET_ALL} | adding url | subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding url | subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} does not exist in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
         return
 
-    # Check if the url exists
-    existing = urls_collection.find_one({"url": url, "subdomain": subdomain, "domain": domain, "program": program})
-
-    update_fields = {}
+    # Check if the url exists for the given method
+    existing = urls_collection.find_one({"url": url, "subdomain": subdomain, "domain": domain, "program": program, "method": method})
 
     if existing:
-        # Subdomain exists, check for updates
+        update_fields = {}
+        
+        # Check for updates in other fields
         if scheme is not None and scheme != existing.get("scheme"):
             update_fields['scheme'] = scheme
-        if method is not None and method != existing.get("method"):
-            update_fields['method'] = method
         if port is not None and port != existing.get("port"):
             update_fields['port'] = port
         if path is not None and path != existing.get("path"):
@@ -806,14 +860,14 @@ def add_url(url, subdomain, domain, program, scheme=None, method=None, port=None
         if update_fields:
             update_fields["updated_at"] = timestamp
             urls_collection.update_one(
-                {"url": url, "subdomain": subdomain, "domain": domain, "program": program},
+                {"url": url, "subdomain": subdomain, "domain": domain, "program": program, "method": method},
                 {"$set": update_fields}
             )
-            print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | updating url | url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL} in subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with updates: {Fore.BLUE}{Style.BRIGHT}{update_fields}{Style.RESET_ALL}")
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| updating url | url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL} in subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with updates: {Fore.BLUE}{Style.BRIGHT}{update_fields}{Style.RESET_ALL}")
         else:
-            print(f"{timestamp} | {Fore.YELLOW}info{Style.RESET_ALL} | updating url | No update for url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL}")
+            print(f"{timestamp} |{Back.YELLOW}{Fore.BLACK} apprise {Style.RESET_ALL}| updating url | No update for url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL}")
     else:
-        # Insert new url
+        # Insert new url, regardless of existing records
         new_url_data = {
             "url": url,
             "subdomain": subdomain,
@@ -838,12 +892,12 @@ def add_url(url, subdomain, domain, program, scheme=None, method=None, port=None
             "created_at": timestamp,
             "updated_at": timestamp
         }
-        
+
         urls_collection.insert_one(new_url_data)
         update_counts_program(program)
         update_counts_domain(program, domain)
         update_counts_subdomain(program, domain, subdomain)
-        print(f"{timestamp} | {Fore.GREEN}success{Style.RESET_ALL} | adding url | url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL} added to subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with details: scheme={Fore.BLUE}{Style.BRIGHT}{scheme}{Style.RESET_ALL}, method={Fore.BLUE}{Style.BRIGHT}{method}{Style.RESET_ALL}, port={Fore.BLUE}{Style.BRIGHT}{port}{Style.RESET_ALL}, status_code={Fore.BLUE}{Style.BRIGHT}{status_code}{Style.RESET_ALL}, location={Fore.BLUE}{Style.BRIGHT}{location}{Style.RESET_ALL}, scope={Fore.BLUE}{Style.BRIGHT}{scope}{Style.RESET_ALL}, cdn_status={Fore.BLUE}{Style.BRIGHT}{cdn_status}{Style.RESET_ALL}, cdn_name={Fore.BLUE}{Style.BRIGHT}{cdn_name}{Style.RESET_ALL}, title={Fore.BLUE}{Style.BRIGHT}{title}{Style.RESET_ALL}, webserver={Fore.BLUE}{Style.BRIGHT}{webserver}{Style.RESET_ALL}, webtech={Fore.BLUE}{Style.BRIGHT}{webtech}{Style.RESET_ALL}, cname={Fore.BLUE}{Style.BRIGHT}{cname}{Style.RESET_ALL}")
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding url | url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL} added to subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with details: scheme={Fore.BLUE}{Style.BRIGHT}{scheme}{Style.RESET_ALL}, method={Fore.BLUE}{Style.BRIGHT}{method}{Style.RESET_ALL}, port={Fore.BLUE}{Style.BRIGHT}{port}{Style.RESET_ALL}, status_code={Fore.BLUE}{Style.BRIGHT}{status_code}{Style.RESET_ALL}, location={Fore.BLUE}{Style.BRIGHT}{location}{Style.RESET_ALL}, scope={Fore.BLUE}{Style.BRIGHT}{scope}{Style.RESET_ALL}, cdn_status={Fore.BLUE}{Style.BRIGHT}{cdn_status}{Style.RESET_ALL}, cdn_name={Fore.BLUE}{Style.BRIGHT}{cdn_name}{Style.RESET_ALL}, title={Fore.BLUE}{Style.BRIGHT}{title}{Style.RESET_ALL}, webserver={Fore.BLUE}{Style.BRIGHT}{webserver}{Style.RESET_ALL}, webtech={Fore.BLUE}{Style.BRIGHT}{webtech}{Style.RESET_ALL}, cname={Fore.BLUE}{Style.BRIGHT}{cname}{Style.RESET_ALL}")
 
 def list_urls(url='*', subdomain='*', domain='*', program='*', scheme=None, method=None, port=None, 
                status_code=None, ip=None, cdn_status=None, cdn_name=None, title=None, webserver=None,
@@ -1141,7 +1195,7 @@ def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, sche
     # Check if the program exists if program is not '*'
     if program != '*':
         if not programs_collection.find_one({"program": program}):
-            print(f"{timestamp} | error | deleting url | program {program} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting url | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
             return
 
     # Start building the delete query
@@ -1198,7 +1252,7 @@ def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, sche
     
     # Confirm deletion
     if result.deleted_count > 0:
-        print(f"{timestamp} | success | deleting url | deleted {result.deleted_count} live entries for program {program} with filters: "
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting url | deleted {result.deleted_count} live entries for program {program} with filters: "
               f"subdomain={subdomain}, domain={domain}, url={url}, scope={scope}, "
               f"scheme={scheme}, method={method}, "
               f"port={port}, status_code={status_code}, ip_address={ip_address}, cdn_status={cdn_status}, "
@@ -1206,12 +1260,17 @@ def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, sche
               f"webserver={webserver}, webtech={webtech}, "
               f"cname={cname}, flag={flag}, path={path}, content_length={content_length}")
 
-def add_ip(ip, program, cidr=None, asn=None, port=None, service=None, cves=None):
+def is_valid_ip(ip):
+    # Simple regex to validate an IP address
+    ip_pattern = re.compile(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$')
+    return ip_pattern.match(ip)
+
+def add_ips(input_value, program, cidr=None, asn=None, port=None, service=None, cves=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check if the program exists
     if not programs_collection.find_one({"program": program}):
-        print(f"{timestamp} | error | adding IP | program {program} does not exist")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding ip | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
         return
 
     # Process CVEs as a list (if provided)
@@ -1223,64 +1282,83 @@ def add_ip(ip, program, cidr=None, asn=None, port=None, service=None, cves=None)
         ports = list(set(ports))  # Remove duplicates
         ports.sort()
 
-    # Check if the IP already exists in the specified program
-    existing_entry = cidrs_collection.find_one({"ip": ip, "program": program})
+    # Handle input as either a file or a single IP address
+    ips = []
 
-    update_fields = {}
-
-    if existing_entry:
-        existing_ports = existing_entry.get("port", "")
-        existing_service = existing_entry.get("service")
-        existing_cves = existing_entry.get("cves")
-        existing_cidr = existing_entry.get("cidr")
-        existing_asn = existing_entry.get("asn")
-
-        # Update fields if parameters are provided
-        if ports is not None:
-            ports_str = ', '.join(ports)
-            if sorted(existing_ports.split(',')) != sorted(ports):
-                update_fields['port'] = ports_str
-
-        if service is not None and service != existing_service:
-            update_fields['service'] = service
-        
-        if cves_list is not None and cves_list != existing_cves:
-            update_fields['cves'] = cves_list
-        
-        if cidr is not None and cidr != existing_cidr:
-            update_fields['cidr'] = cidr
-        
-        if asn is not None and asn != existing_asn:
-            update_fields['asn'] = asn
-
-        # Update the entry only if there are changes
-        if update_fields:
-            update_fields['updated_at'] = timestamp
-            cidrs_collection.update_one(
-                {"ip": ip, "program": program},
-                {"$set": update_fields}
-            )
-            print(f"{timestamp} | success | updating IP | IP {ip} updated in program {program} with updates: {update_fields}")
-        else:
-            print(f"{timestamp} | success | updating IP | IP {ip} is unchanged in program {program}")
+    if is_valid_ip(input_value):
+        ips.append(input_value)
     else:
-        # Insert a new record with the current timestamp
-        ports_str = ', '.join(ports) if ports else None
-        new_entry = {
-            "ip": ip,
-            "program": program,
-            "cidr": cidr if cidr is not None else "none",
-            "asn": asn if asn is not None else "none",
-            "port": ports_str if ports_str is not None else "none",
-            "service": service if service is not None else "none",
-            "cves": cves_list if cves_list is not None else "none",
-            "created_at": timestamp,
-            "updated_at": timestamp
-        }
-        
-        update_counts_program(program)
-        cidrs_collection.insert_one(new_entry)
-        print(f"{timestamp} | success | adding IP | IP {ip} added to program {program} with {{ 'port': {ports_str} }}")
+        try:
+            with open(input_value, 'r') as file:
+                for line in file:
+                    ip = line.strip()
+                    if is_valid_ip(ip):
+                        ips.append(ip)
+                    else:
+                        print(f"Invalid IP address in file: {ip}")
+        except Exception as e:
+            print(f"Error reading file {input_value}: {e}")
+            return
+
+    for ip in ips:
+        # Check if the IP already exists in the specified program
+        existing_entry = cidrs_collection.find_one({"ip": ip, "program": program})
+
+        update_fields = {}
+
+        if existing_entry:
+            existing_ports = existing_entry.get("port", "")
+            existing_service = existing_entry.get("service")
+            existing_cves = existing_entry.get("cves")
+            existing_cidr = existing_entry.get("cidr")
+            existing_asn = existing_entry.get("asn")
+
+            # Update fields if parameters are provided
+            if ports is not None:
+                ports_str = ', '.join(ports)
+                if sorted(existing_ports.split(',')) != sorted(ports):
+                    update_fields['port'] = ports_str
+
+            if service is not None and service != existing_service:
+                update_fields['service'] = service
+            
+            if cves_list is not None and cves_list != existing_cves:
+                update_fields['cves'] = cves_list
+            
+            if cidr is not None and cidr != existing_cidr:
+                update_fields['cidr'] = cidr
+            
+            if asn is not None and asn != existing_asn:
+                update_fields['asn'] = asn
+
+            # Update the entry only if there are changes
+            if update_fields:
+                update_fields['updated_at'] = timestamp
+                cidrs_collection.update_one(
+                    {"ip": ip, "program": program},
+                    {"$set": update_fields}
+                )
+                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| updating ip | IP {Fore.BLUE}{Style.BRIGHT}{ip}{Style.RESET_ALL} updated in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with updates: {Fore.BLUE}{Style.BRIGHT}{update_fields}{Style.RESET_ALL}")
+            else:
+                print(f"{timestamp} |{Back.YELLOW}{Fore.BLACK} apprise {Style.RESET_ALL}| updating ip | IP {Fore.BLUE}{Style.BRIGHT}{ip}{Style.RESET_ALL} is unchanged in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
+        else:
+            # Insert a new record with the current timestamp
+            ports_str = ', '.join(ports) if ports else None
+            new_entry = {
+                "ip": ip,
+                "program": program,
+                "cidr": cidr if cidr is not None else "none",
+                "asn": asn if asn is not None else "none",
+                "port": ports_str if ports_str is not None else "none",
+                "service": service if service is not None else "none",
+                "cves": cves_list if cves_list is not None else "none",
+                "created_at": timestamp,
+                "updated_at": timestamp
+            }
+
+            update_counts_program(program)
+            cidrs_collection.insert_one(new_entry)
+            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding ip | IP {Fore.BLUE}{Style.BRIGHT}{ip}{Style.RESET_ALL} added to program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with {{ 'port': {Fore.BLUE}{Style.BRIGHT}{ports_str}{Style.RESET_ALL} }}")
 
 def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, service=None, 
             cves=None, brief=False, create_time=None, update_time=None, count=False, 
@@ -1291,7 +1369,7 @@ def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, service=None,
     # Check if the program exists if program is not '*'
     if program != '*':
         if not programs_collection.find_one({"program": program}):
-            print(f"{timestamp} | error | listing IP | program {program} does not exist")
+            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| listing ip | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
             return
 
     # Base query for listing IPs
@@ -1416,9 +1494,9 @@ def delete_ip(ip='*', program='*', asn=None, cidr=None, port=None, service=None,
     delete_result = cidrs_collection.delete_many(query)
     if delete_result.deleted_count > 0:
         update_counts_program(program)  # Implement this function as needed
-        print(f"{timestamp} | success | IP(s) deleted from program '{program}' with specified filters.")
+        print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting ip | IP(s) deleted from program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with specified filters.")
     else:
-        print(f"{timestamp} | error | No IPs were deleted with the specified filters.")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting ip | No IPs were deleted with the specified filters")
 
 def parse_time_range(time_range_str):
     # Handle time ranges in the format 'start_time,end_time'
@@ -1696,6 +1774,9 @@ def main():
     delete_ip_parser.add_argument('--cidr', help='Filter by CIDR')  # Optional CIDR filter
     delete_ip_parser.add_argument('--cves', help='Filter by CVEs')  # Optional CVEs filter
 
+    # setup
+    program_parser = sub_parser.add_parser('setup', help='installing mongodb')
+    
     args = parser.parse_args()
 
     # Handle commands
@@ -1776,7 +1857,9 @@ def main():
             
         elif args.action == 'delete':
             delete_ip(ip=args.ip, program=args.program, asn=args.asn, cidr=args.cidr, port=args.port, service=args.service, cves=args.cves)
-
-
+            
+    elif args.command == 'setup':
+        setup()
+        
 if __name__ == "__main__":
     main()
