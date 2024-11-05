@@ -3,10 +3,11 @@
 import re
 import os
 import json
+import ipaddress
 import argparse
 import colorama
 from datetime import datetime
-from pymongo import MongoClient # type: ignore
+from pymongo import MongoClient, ASCENDING
 from colorama import Fore, Style, Back
 from datetime import datetime, timedelta
 
@@ -21,7 +22,7 @@ def setup():
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}gnupg and curl{Style.RESET_ALL} installed")
 
         com=f"curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor &> /dev/null"
-        os.system(com)        
+        os.system(com)
         com=f'echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list &> /dev/null'
         os.system(com)
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}mongo key{Style.RESET_ALL} created")
@@ -29,7 +30,7 @@ def setup():
         com=f"sudo apt-get update &> /dev/null && sudo apt-get install -y mongodb-org &> /dev/null"
         os.system(com)
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}mongodb{Style.RESET_ALL} installed")
-        
+
         com=f"sudo systemctl start mongod &> /dev/null; sudo systemctl daemon-reload &> /dev/null; sudo systemctl enable mongod &> /dev/null"
         os.system(com)
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}mongodb service{Style.RESET_ALL} started")
@@ -38,11 +39,11 @@ def setup():
         com=f"pip install pymongo bson --break-system-packages &> /dev/null"
         os.system(com)
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| installing | the {Fore.BLUE}{Style.BRIGHT}pymongo{Style.RESET_ALL} installed")
-        
+
         # create database
         client = MongoClient('localhost', 27017)
         db = client['scopes']
-        
+
         # add authentication
         com = (
             'mongo scopes --eval '
@@ -64,6 +65,11 @@ domains_collection = db['domains']
 subdomains_collection = db['subdomains']
 urls_collection = db['urls']
 cidrs_collection = db['cidrs']
+
+cidrs_collection.create_index(
+    [("ip", ASCENDING), ("program", ASCENDING), ("port", ASCENDING)],  # Fields to index
+    unique=True  # Ensures the combination is unique
+)
 
 def update_counts_program(program):
     collections = {'domains': domains_collection,'subdomains': subdomains_collection,'urls': urls_collection,'ips': cidrs_collection,}
@@ -203,13 +209,13 @@ def delete_program(program, delete_all=False):
                 subdomains_collection.delete_many({})
                 domains_collection.delete_many({})
                 programs_collection.delete_many({})
-                
+
                 print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting all programs | all programs with program: {program_count}, domains: {domain_count}, subdomains: {subdomain_count}, urls: {url_count}, ips: {ip_count}")
             else:
                 # Only delete all programs
                 programs_collection.delete_many({})
                 print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting programs | deleted all programs")
-        
+
         else:
             if delete_all:
                 # Delete all related data for the specified program
@@ -251,7 +257,7 @@ def add_domain(domain_or_file, program, scope=None):
         domains = [domain_or_file]
 
     new_domains = []
-    
+
     for domain in domains:
         existing_domain = domains_collection.find_one({"domain": domain, "program": program})
 
@@ -286,7 +292,7 @@ def add_domain(domain_or_file, program, scope=None):
         # Insert all new domains at once
         domains_collection.insert_many(new_domains)
         update_counts_program(program)  # Update counts for the program after insertion
-        
+
         for domain in new_domains:
             print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding domain | domain {Fore.BLUE}{Style.BRIGHT}{domain['domain']}{Style.RESET_ALL} added to program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
 
@@ -366,7 +372,7 @@ def delete_domain(domain='*', program='*', scope=None):
         else:
             update_counts_program(program)
             print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{counts['domains']}{Style.RESET_ALL} domains, {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains, and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
-    
+
     else:
         if program == '*':
             # Deleting records across all programs
@@ -391,7 +397,7 @@ def delete_domain(domain='*', program='*', scope=None):
             else:
                 update_counts_program(program)
                 print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting domain | deleted {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} with {Fore.BLUE}{Style.BRIGHT}{counts['subdomains']}{Style.RESET_ALL} subdomains and {Fore.BLUE}{Style.BRIGHT}{counts['urls']}{Style.RESET_ALL} urls")
-        
+
         else:
             # Deleting records in a specific program
             counts = {
@@ -416,7 +422,7 @@ def delete_domain(domain='*', program='*', scope=None):
 
 def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=None, scope=None, resolved=None,
                   ip_address=None, cdn_status=None, cdn_name=None, unip=None, uncdn_name=None):
-    
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check if the program exists
@@ -437,7 +443,7 @@ def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=No
         subdomains = [subdomain_or_file]
 
     new_subdomains = []  # List to hold new subdomain entries
-    
+
     for subdomain in subdomains:
         existing = subdomains_collection.find_one({"subdomain": subdomain, "domain": domain, "program": program})
 
@@ -514,7 +520,7 @@ def add_subdomain(subdomain_or_file, domain, program, sources=None, unsources=No
     if new_subdomains:
         # Insert all new subdomains at once
         subdomains_collection.insert_many(new_subdomains)
-        
+
         # Update counts for the program and domain after insertion
         update_counts_program(program)
         update_counts_domain(program, domain)
@@ -579,19 +585,19 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
     subdomains = list(subdomains_cursor)
 
     # Initialize filtered_subdomains
-    filtered_subdomains = subdomains  
+    filtered_subdomains = subdomains
 
     # Handle counting records based on filters
     if count:
         if source_only and sources:
             filtered_subdomains = [
-                sub for sub in subdomains 
+                sub for sub in subdomains
                 if sub.get('source', '').strip() == sources[0]  # Exact match for source
             ]
         else:
             if sources:
                 filtered_subdomains = [
-                    sub for sub in subdomains 
+                    sub for sub in subdomains
                     if any(source in sub.get('source', '').split(',') for source in sources)
                 ]
         print(len(filtered_subdomains))
@@ -601,19 +607,19 @@ def list_subdomains(subdomain='*', domain='*', program='*', sources=None, scope=
     if sources:
         # Normalize the sources input to a set for efficient lookup
         source_set = set(src.strip() for src in sources)
-        
+
         if source_only:
             filtered_subdomains = [
-                sub for sub in filtered_subdomains 
+                sub for sub in filtered_subdomains
                 if sub.get('source', '').strip() == sources[0]  # Exact match for source
             ]
         else:
             filtered_subdomains = [
-                sub for sub in filtered_subdomains 
+                sub for sub in filtered_subdomains
                 if any(src.strip() in source_set for src in sub.get('source', '').split(','))
             ]
 
-   
+
     # Statistics calculations
     def print_statistics(filtered, key_name, title):
         count_map = {}
@@ -823,7 +829,7 @@ def add_url(url, subdomain, domain, program, scheme=None, method=None, port=None
 
     if existing:
         update_fields = {}
-        
+
         # Check for updates in other fields
         if scheme is not None and scheme != existing.get("scheme"):
             update_fields['scheme'] = scheme
@@ -899,13 +905,13 @@ def add_url(url, subdomain, domain, program, scheme=None, method=None, port=None
         update_counts_subdomain(program, domain, subdomain)
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding url | url {Fore.BLUE}{Style.BRIGHT}{url}{Style.RESET_ALL} added to subdomain {Fore.BLUE}{Style.BRIGHT}{subdomain}{Style.RESET_ALL} in domain {Fore.BLUE}{Style.BRIGHT}{domain}{Style.RESET_ALL} in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with details: scheme={Fore.BLUE}{Style.BRIGHT}{scheme}{Style.RESET_ALL}, method={Fore.BLUE}{Style.BRIGHT}{method}{Style.RESET_ALL}, port={Fore.BLUE}{Style.BRIGHT}{port}{Style.RESET_ALL}, status_code={Fore.BLUE}{Style.BRIGHT}{status_code}{Style.RESET_ALL}, location={Fore.BLUE}{Style.BRIGHT}{location}{Style.RESET_ALL}, scope={Fore.BLUE}{Style.BRIGHT}{scope}{Style.RESET_ALL}, cdn_status={Fore.BLUE}{Style.BRIGHT}{cdn_status}{Style.RESET_ALL}, cdn_name={Fore.BLUE}{Style.BRIGHT}{cdn_name}{Style.RESET_ALL}, title={Fore.BLUE}{Style.BRIGHT}{title}{Style.RESET_ALL}, webserver={Fore.BLUE}{Style.BRIGHT}{webserver}{Style.RESET_ALL}, webtech={Fore.BLUE}{Style.BRIGHT}{webtech}{Style.RESET_ALL}, cname={Fore.BLUE}{Style.BRIGHT}{cname}{Style.RESET_ALL}")
 
-def list_urls(url='*', subdomain='*', domain='*', program='*', scheme=None, method=None, port=None, 
+def list_urls(url='*', subdomain='*', domain='*', program='*', scheme=None, method=None, port=None,
                status_code=None, ip=None, cdn_status=None, cdn_name=None, title=None, webserver=None,
                webtech=None, cname=None, create_time=None, update_time=None, brief=False, scope=None,
                location=None, count=False, stats_subdomain=False, stats_domain=False, stats_program=False,
-               stats_scheme=False, stats_method=False, stats_port=False, stats_status_code=False, stats_scope=False, 
+               stats_scheme=False, stats_method=False, stats_port=False, stats_status_code=False, stats_scope=False,
                stats_title=False, stats_ip_address=False, stats_cdn_status=False, stats_cdn_name=False, stats_webserver=False,
-               stats_webtech=False, stats_cname=False, stats_location=False, stats_created_at=False, stats_updated_at=False, 
+               stats_webtech=False, stats_cname=False, stats_location=False, stats_created_at=False, stats_updated_at=False,
                flag=None, content_length=None, path=None, stats_flag=None, stats_content_length=None, stats_path=None):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -987,7 +993,7 @@ def list_urls(url='*', subdomain='*', domain='*', program='*', scheme=None, meth
         for stat_name, count in statistics.items():
             percentage = (count / total_count) * 100 if total_count > 0 else 0
             print(f"{stat_name}: {count} ({percentage:.2f}%)")
-    
+
     # Collect statistics
     if stats_subdomain:
         subdomain_count = {}
@@ -1185,13 +1191,13 @@ def list_urls(url='*', subdomain='*', domain='*', program='*', scheme=None, meth
     else:
         print(json.dumps(live_urls, indent=2))
 
-def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, scheme=None, 
+def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, scheme=None,
                method=None, port=None, status_code=None, ip_address=None,
-               cdn_status=None, cdn_name=None, title=None, webserver=None, 
+               cdn_status=None, cdn_name=None, title=None, webserver=None,
                webtech=None, cname=None, location=None, flag=None, path=None, content_length=None):
-    
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Check if the program exists if program is not '*'
     if program != '*':
         if not programs_collection.find_one({"program": program}):
@@ -1200,7 +1206,7 @@ def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, sche
 
     # Start building the delete query
     query = {}
-    
+
     # Handle filtering for each parameter
     if program != '*':
         query["program"] = program
@@ -1245,11 +1251,11 @@ def delete_url(url='*', subdomain='*', domain='*', program='*', scope=None, sche
 
     # Execute the delete query
     result = urls_collection.delete_many(query)
-    
+
     update_counts_program(program)
     update_counts_domain(program, domain)
     update_counts_subdomain(program, domain, subdomain)
-    
+
     # Confirm deletion
     if result.deleted_count > 0:
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting url | deleted {result.deleted_count} live entries for program {program} with filters: "
@@ -1265,92 +1271,44 @@ def is_valid_ip(ip):
     ip_pattern = re.compile(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$')
     return ip_pattern.match(ip)
 
-def add_ips(input_value, program, cidr=None, asn=None, port=None, service=None, cves=None):
+def add_ip(input_value, program, cidr=None, asn=None, port=None, hostname=None, domain=None, 
+           organization=None, data=None, ssl=None, isp=None, os=None, product=None, 
+           version=None, cves=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check if the program exists
     if not programs_collection.find_one({"program": program}):
-        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| adding ip | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+        print(f"{timestamp} | error | adding ip | program {program} does not exist")
         return
 
     # Process CVEs as a list (if provided)
     cves_list = ', '.join(cves) if cves else None
 
-    # Convert ports to a list of strings if provided and remove duplicates
-    ports = list(map(str, port)) if port else None
-    if ports:
-        ports = list(set(ports))  # Remove duplicates
-        ports.sort()
+    # Convert IP to integer (assuming input_value is an IP string)
+    ip = input_value
 
-    # Handle input as either a file or a single IP address
-    ips = []
+    # Handle single port
+    if port:
+        # Check if the combination of ip, program, and port exists
+        existing_entry = cidrs_collection.find_one({"ip": ip, "program": program, "port": port})
 
-    if is_valid_ip(input_value):
-        ips.append(input_value)
-    else:
-        try:
-            with open(input_value, 'r') as file:
-                for line in file:
-                    ip = line.strip()
-                    if is_valid_ip(ip):
-                        ips.append(ip)
-                    else:
-                        print(f"Invalid IP address in file: {ip}")
-        except Exception as e:
-            print(f"Error reading file {input_value}: {e}")
-            return
-
-    for ip in ips:
-        # Check if the IP already exists in the specified program
-        existing_entry = cidrs_collection.find_one({"ip": ip, "program": program})
-
-        update_fields = {}
-
-        if existing_entry:
-            existing_ports = existing_entry.get("port", "")
-            existing_service = existing_entry.get("service")
-            existing_cves = existing_entry.get("cves")
-            existing_cidr = existing_entry.get("cidr")
-            existing_asn = existing_entry.get("asn")
-
-            # Update fields if parameters are provided
-            if ports is not None:
-                ports_str = ', '.join(ports)
-                if sorted(existing_ports.split(',')) != sorted(ports):
-                    update_fields['port'] = ports_str
-
-            if service is not None and service != existing_service:
-                update_fields['service'] = service
-            
-            if cves_list is not None and cves_list != existing_cves:
-                update_fields['cves'] = cves_list
-            
-            if cidr is not None and cidr != existing_cidr:
-                update_fields['cidr'] = cidr
-            
-            if asn is not None and asn != existing_asn:
-                update_fields['asn'] = asn
-
-            # Update the entry only if there are changes
-            if update_fields:
-                update_fields['updated_at'] = timestamp
-                cidrs_collection.update_one(
-                    {"ip": ip, "program": program},
-                    {"$set": update_fields}
-                )
-                print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| updating ip | IP {Fore.BLUE}{Style.BRIGHT}{ip}{Style.RESET_ALL} updated in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with updates: {Fore.BLUE}{Style.BRIGHT}{update_fields}{Style.RESET_ALL}")
-            else:
-                print(f"{timestamp} |{Back.YELLOW}{Fore.BLACK} apprise {Style.RESET_ALL}| updating ip | IP {Fore.BLUE}{Style.BRIGHT}{ip}{Style.RESET_ALL} is unchanged in program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL}")
-        else:
-            # Insert a new record with the current timestamp
-            ports_str = ', '.join(ports) if ports else None
+        if not existing_entry:
+            # Insert a new record if no existing entry is found for this combination
             new_entry = {
                 "ip": ip,
                 "program": program,
                 "cidr": cidr if cidr is not None else "none",
                 "asn": asn if asn is not None else "none",
-                "port": ports_str if ports_str is not None else "none",
-                "service": service if service is not None else "none",
+                "port": port,  # Store the port separately
+                "hostname": hostname if hostname is not None else "none",
+                "domain": domain if domain is not None else "none",
+                "organization": organization if organization is not None else "none",
+                "data": data if data is not None else "none",  # Large data field
+                "ssl": ssl if ssl is not None else "none",  # Large ssl field
+                "isp": isp if isp is not None else "none",
+                "os": os if os is not None else "none",
+                "product": product if product is not None else "none",
+                "version": version if version is not None else "none",
                 "cves": cves_list if cves_list is not None else "none",
                 "created_at": timestamp,
                 "updated_at": timestamp
@@ -1358,23 +1316,158 @@ def add_ips(input_value, program, cidr=None, asn=None, port=None, service=None, 
 
             update_counts_program(program)
             cidrs_collection.insert_one(new_entry)
-            print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| adding ip | IP {Fore.BLUE}{Style.BRIGHT}{ip}{Style.RESET_ALL} added to program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with {{ 'port': {Fore.BLUE}{Style.BRIGHT}{ports_str}{Style.RESET_ALL} }}")
+            print(f"{timestamp} | success | adding ip | IP {ip} added to program {program} with port {port}")
 
-def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, service=None, 
-            cves=None, brief=False, create_time=None, update_time=None, count=False, 
-            stats_domain=False, stats_cidr=False, stats_asn=False, stats_port=False):
+        else:
+            # If the record exists for the combination (ip, program, port)
+            # We can update other fields (cidr, asn, hostname, domain, etc.) if they differ
+            update_fields = {}
+
+            # Only update fields if the new values differ from the existing ones
+            if cidr and cidr != existing_entry.get("cidr"):
+                update_fields['cidr'] = cidr
+
+            if asn and asn != existing_entry.get("asn"):
+                update_fields['asn'] = asn
+
+            if hostname and hostname != existing_entry.get("hostname"):
+                update_fields['hostname'] = hostname
+
+            if domain and domain != existing_entry.get("domain"):
+                update_fields['domain'] = domain
+
+            if organization and organization != existing_entry.get("organization"):
+                update_fields['organization'] = organization
+
+            if data and data != existing_entry.get("data"):
+                update_fields['data'] = data
+
+            if ssl and ssl != existing_entry.get("ssl"):
+                update_fields['ssl'] = ssl
+
+            if isp and isp != existing_entry.get("isp"):
+                update_fields['isp'] = isp
+
+            if os and os != existing_entry.get("os"):
+                update_fields['os'] = os
+
+            if product and product != existing_entry.get("product"):
+                update_fields['product'] = product
+
+            if version and version != existing_entry.get("version"):
+                update_fields['version'] = version
+
+            if cves_list and cves_list != existing_entry.get("cves"):
+                update_fields['cves'] = cves_list
+
+            # If there are any changes, update the record
+            if update_fields:
+                update_fields['updated_at'] = timestamp
+                cidrs_collection.update_one(
+                    {"ip": ip, "program": program, "port": port},
+                    {"$set": update_fields}
+                )
+                print(f"{timestamp} | success | updating ip | IP {ip} updated in program {program} with updates: {update_fields}")
+            else:
+                print(f"{timestamp} | apprise | IP {ip} in program {program} for port {port} is unchanged.")
+    else:
+        # Handle the case for a single IP without a specific port
+        existing_entry = cidrs_collection.find_one({"ip": ip, "program": program})
+
+        if not existing_entry:
+            # Insert a new record if no existing entry is found
+            new_entry = {
+                "ip": ip,
+                "program": program,
+                "cidr": cidr if cidr is not None else "none",
+                "asn": asn if asn is not None else "none",
+                "port": "none",  # Default if no port specified
+                "hostname": hostname if hostname is not None else "none",
+                "domain": domain if domain is not None else "none",
+                "organization": organization if organization is not None else "none",
+                "data": data if data is not None else "none",  # Large data field
+                "ssl": ssl if ssl is not None else "none",  # Large ssl field
+                "isp": isp if isp is not None else "none",
+                "os": os if os is not None else "none",
+                "product": product if product is not None else "none",
+                "version": version if version is not None else "none",
+                "cves": cves_list if cves_list is not None else "none",
+                "created_at": timestamp,
+                "updated_at": timestamp
+            }
+
+            update_counts_program(program)
+            cidrs_collection.insert_one(new_entry)
+            print(f"{timestamp} | success | adding ip | IP {ip} added to program {program} without specific port")
+        else:
+            # Update the existing record with new data for fields like cidr, asn, hostname, etc.
+            update_fields = {}
+
+            # Only update fields if the new values differ from the existing ones
+            if cidr and cidr != existing_entry.get("cidr"):
+                update_fields['cidr'] = cidr
+
+            if asn and asn != existing_entry.get("asn"):
+                update_fields['asn'] = asn
+
+            if hostname and hostname != existing_entry.get("hostname"):
+                update_fields['hostname'] = hostname
+
+            if domain and domain != existing_entry.get("domain"):
+                update_fields['domain'] = domain
+
+            if organization and organization != existing_entry.get("organization"):
+                update_fields['organization'] = organization
+
+            if data and data != existing_entry.get("data"):
+                update_fields['data'] = data
+
+            if ssl and ssl != existing_entry.get("ssl"):
+                update_fields['ssl'] = ssl
+
+            if isp and isp != existing_entry.get("isp"):
+                update_fields['isp'] = isp
+
+            if os and os != existing_entry.get("os"):
+                update_fields['os'] = os
+
+            if product and product != existing_entry.get("product"):
+                update_fields['product'] = product
+
+            if version and version != existing_entry.get("version"):
+                update_fields['version'] = version
+
+            if cves_list and cves_list != existing_entry.get("cves"):
+                update_fields['cves'] = cves_list
+
+            # If there are any changes, update the record
+            if update_fields:
+                update_fields['updated_at'] = timestamp
+                cidrs_collection.update_one(
+                    {"ip": ip, "program": program},
+                    {"$set": update_fields}
+                )
+                print(f"{timestamp} | success | updating ip | IP {ip} updated in program {program} with updates: {update_fields}")
+            else:
+                print(f"{timestamp} | apprise | IP {ip} is unchanged in program {program}")
+
+def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, hostname=None, domain=None, 
+            organization=None, data=None, ssl=None, isp=None, os=None, product=None, 
+            version=None, cves=None, brief=False, create_time=None, update_time=None, count=False,
+            stats_domain=False, stats_cidr=False, stats_asn=False, stats_port=False, stats_isp=False,
+            stats_os=False, stats_product=False, stats_version=False, stats_cves=False):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check if the program exists if program is not '*'
     if program != '*':
         if not programs_collection.find_one({"program": program}):
-            print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| listing ip | program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} does not exist")
+            print(f"{timestamp} | error | listing ip | program {program} does not exist")
             return
 
     # Base query for listing IPs
     query = {}
-    
+
     # Building the query filters
     if program != '*':
         query['program'] = program
@@ -1384,29 +1477,38 @@ def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, service=None,
         query['cidr'] = cidr
     if asn:
         query['asn'] = asn
-    if service:
-        query['service'] = service
+    if hostname:
+        query['hostname'] = hostname
+    if domain:
+        query['domain'] = domain
+    if organization:
+        query['organization'] = organization
+    if data:
+        query['data'] = {"$regex": data}  # Assuming 'data' can be a large string with regex search
+    if ssl:
+        query['ssl'] = {"$regex": ssl}  # Assuming 'ssl' can be a large string with regex search
+    if isp:
+        query['isp'] = isp
+    if os:
+        query['os'] = os
+    if product:
+        query['product'] = product
+    if version:
+        query['version'] = version
     if cves:
         if isinstance(cves, str):  # Ensure cves is a string
             query['cves'] = {"$regex": cves}
+
     if create_time:
         start_time, end_time = parse_time_range(create_time)
         query['created_at'] = {"$gte": start_time, "$lte": end_time}
     if update_time:
         start_time, end_time = parse_time_range(update_time)
         query['updated_at'] = {"$gte": start_time, "$lte": end_time}
-    
+
     # Handling port filtering
     if port:
-        if isinstance(port, list):
-            query['port'] = {"$in": [str(p) for p in port]}  # Ensure all ports are strings
-        else:
-            # Convert port to string if it's not already
-            port_str = str(port)
-            query['$or'] = [
-                {"port": port_str},
-                {"port": {"$regex": port_str}}
-            ]
+        query['port'] = str(port)  # Ensure the port is in string format
 
     # If count is requested, modify the query
     if count:
@@ -1422,25 +1524,41 @@ def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, service=None,
         count_map = {}
         total_count = len(ips)
         for ip_record in ips:
-            key_value = ip_record[key_index]
+            key_value = ip_record.get(key_index, "none")  # Default to "none" if the field is missing
             count_map[key_value] = count_map.get(key_value, 0) + 1
-        
+
         print(f"{stat_type} statistics:")
         for key_value, count in count_map.items():
             percentage = (count / total_count) * 100 if total_count > 0 else 0
             print(f"{key_value}: {count} ({percentage:.2f}%)")
 
+    # Handle statistics for various fields
     if stats_domain:
-        print_statistics("Domain", "program")  # Adjust index based on your data structure
+        print_statistics("Domain", "domain")
         return
     if stats_cidr:
-        print_statistics("CIDR", "cidr")  # Adjust index based on your data structure
+        print_statistics("CIDR", "cidr")
         return
     if stats_asn:
-        print_statistics("ASN", "asn")  # Adjust index based on your data structure
+        print_statistics("ASN", "asn")
         return
     if stats_port:
-        print_statistics("Port", "port")  # Adjust index based on your data structure
+        print_statistics("Port", "port")
+        return
+    if stats_isp:
+        print_statistics("ISP", "isp")
+        return
+    if stats_os:
+        print_statistics("OS", "os")
+        return
+    if stats_product:
+        print_statistics("Product", "product")
+        return
+    if stats_version:
+        print_statistics("Version", "version")
+        return
+    if stats_cves:
+        print_statistics("CVEs", "cves")
         return
 
     # Handle output
@@ -1451,7 +1569,9 @@ def list_ip(ip='*', program='*', cidr=None, asn=None, port=None, service=None,
         else:
             print(json.dumps(ips, default=str, indent=4))  # Print the full records
 
-def delete_ip(ip='*', program='*', asn=None, cidr=None, port=None, service=None, cves=None):
+def delete_ip(ip='*', program='*', asn=None, cidr=None, port=None, cves=None,
+              hostname=None, domain=None, organization=None, data=None, ssl=None, isp=None, 
+              os=None, product=None, version=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Build the base query for deletion
@@ -1474,29 +1594,52 @@ def delete_ip(ip='*', program='*', asn=None, cidr=None, port=None, service=None,
 
     # Handle port filtering
     if port:
-        query['$or'] = [
-            {"port": port},
-            {"port": {"$regex": port}}  # Allow partial matches for ports
-        ]
-
-    if service:
-        query['service'] = service
+        query['port'] = port
 
     if cves:
-        query['cves'] = {"$regex": cves}  # Assuming CVEs are stored in a way that supports regex
+        query['cves'] = {"$regex": cves, "$options": 'i'}  # Case-insensitive regex for CVEs
+
+    # New filters (hostname, domain, organization, data, ssl, isp, os, product, version)
+    if hostname:
+        query['hostname'] = hostname
+
+    if domain:
+        query['domain'] = domain
+
+    if organization:
+        query['organization'] = organization
+
+    if data:
+        query['data'] = {"$regex": data, "$options": 'i'}  # Case-insensitive regex for data
+
+    if ssl:
+        query['ssl'] = {"$regex": ssl, "$options": 'i'}  # Case-insensitive regex for SSL
+
+    if isp:
+        query['isp'] = isp
+
+    if os:
+        query['os'] = os
+
+    if product:
+        query['product'] = product
+
+    if version:
+        query['version'] = version
 
     # Check if any documents match the criteria before deletion
-    if cidrs_collection.count_documents(query) == 0:
+    matching_count = cidrs_collection.count_documents(query)
+    if matching_count == 0:
         print(f"{timestamp} | error | No matching IP found for deletion with specified filters.")
         return
 
     # Perform the deletion
     delete_result = cidrs_collection.delete_many(query)
     if delete_result.deleted_count > 0:
-        update_counts_program(program)  # Implement this function as needed
+        update_counts_program(program)
         print(f"{timestamp} |{Back.GREEN}{Fore.BLACK} success {Style.RESET_ALL}| deleting ip | IP(s) deleted from program {Fore.BLUE}{Style.BRIGHT}{program}{Style.RESET_ALL} with specified filters.")
     else:
-        print(f"{timestamp} |{Back.RED}{Fore.BLACK}  error  {Style.RESET_ALL}| deleting ip | No IPs were deleted with the specified filters")
+        print(f"{timestamp} |{Back.RED}{Fore.BLACK} error {Style.RESET_ALL}| deleting ip | No IPs were deleted with the specified filters.")
 
 def parse_time_range(time_range_str):
     # Handle time ranges in the format 'start_time,end_time'
@@ -1712,7 +1855,7 @@ def main():
     list_url_parser.add_argument('--stats-created-at', action='store_true', help='Show statistics based on creation time')
     list_url_parser.add_argument('--stats-updated-at', action='store_true', help='Show statistics based on update time')
 
-    
+
     delete_url_parser = live_action_parser.add_parser('delete', help='Delete urls')
     delete_url_parser.add_argument('url', help='URL of the live subdomain')
     delete_url_parser.add_argument('subdomain', help='Subdomain')
@@ -1741,21 +1884,37 @@ def main():
 
     add_ip_parser = ip_action_parser.add_parser('add', help='Add an IP to a program')
     add_ip_parser.add_argument('ip', help='IP address')
-    add_ip_parser.add_argument('program', help='Program name')
+    add_ip_parser.add_argument('program', help='program name')
     add_ip_parser.add_argument('--cidr', help='CIDR notation')
     add_ip_parser.add_argument('--asn', help='Autonomous System Number')
-    add_ip_parser.add_argument('--port', type=int, nargs='+', help='One or more port numbers')
-    add_ip_parser.add_argument('--service', help='Service on the IP')
+    add_ip_parser.add_argument('--port', help='One port number')
+    add_ip_parser.add_argument('--hostname', help='Hostname associated with the IP')
+    add_ip_parser.add_argument('--domain', help='Domain associated with the IP')
+    add_ip_parser.add_argument('--organization', help='Organization name associated with the IP')
+    add_ip_parser.add_argument('--data', help='Large data field associated with the IP')
+    add_ip_parser.add_argument('--ssl', help='SSL information associated with the IP')
+    add_ip_parser.add_argument('--isp', help='Internet Service Provider associated with the IP')
+    add_ip_parser.add_argument('--os', help='Operating System associated with the IP')
+    add_ip_parser.add_argument('--product', help='Product associated with the IP')
+    add_ip_parser.add_argument('--version', help='Version of the product associated with the IP')
     add_ip_parser.add_argument('--cves', nargs='+', help='Comma-separated CVEs associated with the IP')
 
     list_ips_parser = ip_action_parser.add_parser('list', help='List IPs in a program')
     list_ips_parser.add_argument('ip', help='IP or CIDR (use * for all IPs)')
-    list_ips_parser.add_argument('program', help='program (use * for all programs)')
+    list_ips_parser.add_argument('program', help='Program (use * for all programs)')
     list_ips_parser.add_argument('--cidr', help='Filter by CIDR')
     list_ips_parser.add_argument('--asn', help='Filter by ASN')
-    list_ips_parser.add_argument('--port', type=int, help='Filter by port')
-    list_ips_parser.add_argument('--service', help='Filter by service')
-    list_ips_parser.add_argument('--cves', help='Filter by CVEs')  # Added this line
+    list_ips_parser.add_argument('--port', type=int, help='Filter by port')  # Port filter
+    list_ips_parser.add_argument('--hostname', help='Filter by hostname')  # Added hostname filter
+    list_ips_parser.add_argument('--domain', help='Filter by domain')  # Added domain filter
+    list_ips_parser.add_argument('--organization', help='Filter by organization')  # Added organization filter
+    list_ips_parser.add_argument('--data', help='Filter by data')  # Added data filter
+    list_ips_parser.add_argument('--ssl', help='Filter by SSL')  # Added ssl filter
+    list_ips_parser.add_argument('--isp', help='Filter by ISP')  # Added ISP filter
+    list_ips_parser.add_argument('--os', help='Filter by OS')  # Added OS filter
+    list_ips_parser.add_argument('--product', help='Filter by product')  # Added product filter
+    list_ips_parser.add_argument('--version', help='Filter by version')  # Added version filter
+    list_ips_parser.add_argument('--cves', help='Filter by CVEs')  # Added CVEs filter
     list_ips_parser.add_argument('--brief', action='store_true', help='Show only IP addresses')
     list_ips_parser.add_argument('--create_time', help='Filter by creation time')
     list_ips_parser.add_argument('--update_time', help='Filter by update time')
@@ -1764,19 +1923,32 @@ def main():
     list_ips_parser.add_argument('--stats-cidr', action='store_true', help='Show statistics by CIDR')
     list_ips_parser.add_argument('--stats-asn', action='store_true', help='Show statistics by ASN')
     list_ips_parser.add_argument('--stats-port', action='store_true', help='Show statistics by port')
+    list_ips_parser.add_argument('--stats-isp', action='store_true', help='Show statistics by ISP')  # Added ISP stats
+    list_ips_parser.add_argument('--stats-os', action='store_true', help='Show statistics by OS')  # Added OS stats
+    list_ips_parser.add_argument('--stats-product', action='store_true', help='Show statistics by product')  # Added Product stats
+    list_ips_parser.add_argument('--stats-version', action='store_true', help='Show statistics by version')  # Added Version stats
+    list_ips_parser.add_argument('--stats-cves', action='store_true', help='Show statistics by CVEs')  # Added CVEs stats
 
     delete_ip_parser = ip_action_parser.add_parser('delete', help='Delete IPs')
     delete_ip_parser.add_argument('ip', help='IP or CIDR (use * for all IPs)')  # Specify IP or CIDR
-    delete_ip_parser.add_argument('program', help='program (use * for all programs)')  # Specify program
+    delete_ip_parser.add_argument('program', help='Program (use * for all programs)')  # Specify program
     delete_ip_parser.add_argument('--port', type=int, help='Filter by port')  # Optional port filter
-    delete_ip_parser.add_argument('--service', help='Filter by service')  # Optional service filter
     delete_ip_parser.add_argument('--asn', help='Filter by ASN')  # Optional ASN filter
     delete_ip_parser.add_argument('--cidr', help='Filter by CIDR')  # Optional CIDR filter
     delete_ip_parser.add_argument('--cves', help='Filter by CVEs')  # Optional CVEs filter
+    delete_ip_parser.add_argument('--hostname', help='Filter by hostname')  # Optional hostname filter
+    delete_ip_parser.add_argument('--domain', help='Filter by domain')  # Optional domain filter
+    delete_ip_parser.add_argument('--organization', help='Filter by organization')  # Optional organization filter
+    delete_ip_parser.add_argument('--data', help='Filter by data')  # Optional data filter
+    delete_ip_parser.add_argument('--ssl', help='Filter by SSL')  # Optional SSL filter
+    delete_ip_parser.add_argument('--isp', help='Filter by ISP')  # Optional ISP filter
+    delete_ip_parser.add_argument('--os', help='Filter by OS')  # Optional OS filter
+    delete_ip_parser.add_argument('--product', help='Filter by product')  # Optional product filter
+    delete_ip_parser.add_argument('--version', help='Filter by version')  # Optional version filter
 
     # setup
     program_parser = sub_parser.add_parser('setup', help='installing mongodb')
-    
+
     args = parser.parse_args()
 
     # Handle commands
@@ -1798,19 +1970,19 @@ def main():
 
     elif args.command == 'subdomain':
         if args.action == 'add':
-            add_subdomain(args.subdomain, args.domain, args.program, sources=args.source, unsources=args.unsource, 
-                          scope=args.scope, resolved=args.resolved, ip_address=args.ip, unip=args.unip, cdn_status=args.cdn_status, 
+            add_subdomain(args.subdomain, args.domain, args.program, sources=args.source, unsources=args.unsource,
+                          scope=args.scope, resolved=args.resolved, ip_address=args.ip, unip=args.unip, cdn_status=args.cdn_status,
                           cdn_name=args.cdn_name, uncdn_name=args.uncdn_name)
-            
+
         elif args.action == 'list':
             list_subdomains(subdomain=args.subdomain, domain=args.domain, program=args.program, sources=args.source,
                             scope=args.scope, resolved=args.resolved, brief=args.brief, source_only=args.source_only,
                             cdn_status=args.cdn_status, ip=args.ip, cdn_name=args.cdn_name, count=args.count,
                             create_time=args.create_time, update_time=args.update_time, stats_source=args.stats_source,
                             stats_scope=args.stats_scope, stats_cdn_status=args.stats_cdn_status, stats_cdn_name=args.stats_cdn_name,
-                            stats_resolved=args.stats_resolved, stats_ip_address=args.stats_ip_address, stats_domain=args.stats_domain, 
+                            stats_resolved=args.stats_resolved, stats_ip_address=args.stats_ip_address, stats_domain=args.stats_domain,
                             stats_program=args.stats_program, stats_created_at=args.stats_created_at, stats_updated_at=args.stats_updated_at)
-            
+
         elif args.action == 'delete':
             if os.path.isfile(args.subdomain):
                 with open(args.subdomain, 'r') as file:
@@ -1826,7 +1998,7 @@ def main():
             add_url(args.url, args.subdomain, args.domain, args.program, scheme=args.scheme, method=args.method, port=args.port, status_code=args.status_code,
                     ip_address=args.ip, cdn_status=args.cdn_status, cdn_name=args.cdn_name, title=args.title, webserver=args.webserver, webtech=args.webtech,
                     cname=args.cname, scope=args.scope, location=args.location, flag=args.flag, content_length=args.content_length, path=args.path)
-            
+
         elif args.action == 'list':
             list_urls(args.url, args.subdomain, args.domain, args.program, scheme=args.scheme, method=args.method, port=args.port,
                       status_code=args.status_code, ip=args.ip, cdn_status=args.cdn_status, cdn_name=args.cdn_name, title=args.title,
@@ -1836,30 +2008,33 @@ def main():
                       stats_cdn_status=args.stats_cdn_status, stats_cname=args.stats_cname, stats_created_at=args.stats_created_at,
                       stats_ip_address=args.stats_ip_address, stats_location=args.stats_location, stats_method=args.stats_method,
                       stats_port=args.stats_port, stats_scheme=args.stats_scheme, stats_scope=args.stats_scope, stats_status_code=args.stats_status_code,
-                      stats_title=args.stats_title, stats_updated_at=args.stats_updated_at, stats_webserver=args.stats_webserver, 
+                      stats_title=args.stats_title, stats_updated_at=args.stats_updated_at, stats_webserver=args.stats_webserver,
                       stats_webtech=args.stats_webtech, flag=args.flag, path=args.path, content_length=args.content_length, stats_content_length=args.stats_content_length,
                       stats_flag=args.stats_flag, stats_path=args.stats_path)
-            
+
         elif args.action == 'delete':
             delete_url(args.url, args.subdomain, args.domain, args.program, scheme=args.scheme, method=args.method, port=args.port,
                        status_code=args.status_code, ip_address=args.ip, cdn_status=args.cdn_status, cdn_name=args.cdn_name,
-                       title=args.title, webserver=args.webserver, webtech=args.webtech, cname=args.cname, scope=args.scope, 
+                       title=args.title, webserver=args.webserver, webtech=args.webtech, cname=args.cname, scope=args.scope,
                        location=args.location, path=args.path, flag=args.flag, content_length=args.content_length)
-            
+
     elif args.command == 'ip':
         if args.action == 'add':
-            add_ip(args.ip, args.program, args.cidr, args.asn, args.port, args.service, args.cves)
-            
+            add_ip(args.ip, args.program, args.cidr, args.asn, args.port, args.hostname, args.domain, args.organization,
+                   args.data, args.ssl, args.isp, args.os, args.product, args.version, args.cves)
+
         elif args.action == 'list':
-            list_ip(args.ip, args.program, cidr=args.cidr, asn=args.asn, port=args.port, service=args.service,
-                    brief=args.brief, cves=args.cves, create_time=args.create_time, update_time=args.update_time, count=args.count,
-                    stats_asn=args.stats_asn, stats_cidr=args.stats_cidr, stats_domain=args.stats_domain, stats_port=args.stats_port)
-            
+            list_ip(args.ip, args.program, cidr=args.cidr, asn=args.asn, port=args.port, hostname=args.hostname, domain=args.domain, organization=args.organization, data=args.data, ssl=args.ssl,
+                    isp=args.isp, os=args.os, product=args.product, version=args.version, cves=args.cves, brief=args.brief, create_time=args.create_time,
+                    update_time=args.update_time, count=args.count, stats_asn=args.stats_asn, stats_cidr=args.stats_cidr, stats_domain=args.stats_domain, stats_port=args.stats_port,
+                    stats_isp=args.stats_isp, stats_os=args.stats_os, stats_product=args.stats_product, stats_version=args.stats_version, stats_cves=args.stats_cves)
+
         elif args.action == 'delete':
-            delete_ip(ip=args.ip, program=args.program, asn=args.asn, cidr=args.cidr, port=args.port, service=args.service, cves=args.cves)
-            
+            delete_ip(ip=args.ip, program=args.program, asn=args.asn, cidr=args.cidr, port=args.port, cves=args.cves, hostname=args.hostname,
+                    domain=args.domain, organization=args.organization, data=args.data, ssl=args.ssl, isp=args.isp, os=args.os, version=args.version)
+
     elif args.command == 'setup':
         setup()
-        
+
 if __name__ == "__main__":
     main()
