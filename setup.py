@@ -37,7 +37,7 @@ def setup():
         # add authentication
         com = (
             'mongosh scopes --eval '
-            '\'db.createUser({ user: "hunthub", pwd: "eeec497c78400d2189dc1e3c4c808bbc67e316a8cc6be80e68abae13ac029918", roles: [{ role: "readWrite", db: "scopes" }] })\''
+            '\'db.createUser({ user: "hunthub", pwd: "pass", roles: [{ role: "readWrite", db: "scopes" }] })\''
         )
         os.system(com)
     except Exception as E:
