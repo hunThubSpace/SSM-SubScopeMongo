@@ -7,7 +7,7 @@ from colorama import Fore, Style, Back
 from datetime import datetime, timedelta
 
 
-client = MongoClient('mongodb://hunthub:eeec497c78400d2189dc1e3c4c808bbc67e316a8cc6be80e68abae13ac029918@localhost:27017/scopes')
+client = MongoClient('mongodb://hunthub:pass@localhost:27017/scopes')
 #client = MongoClient('localhost', 27017)  # Adjust as needed
 
 db = client['scopes']
