@@ -99,9 +99,9 @@ def main():
     elif args.command == 'setup':
         setup()
     elif args.command == 'import':
-        importdb('hunthub', 'eeec497c78400d2189dc1e3c4c808bbc67e316a8cc6be80e68abae13ac029918')
+        importdb('hunthub', 'pass')
     elif args.command == 'export':
-        exportdb('hunthub', 'eeec497c78400d2189dc1e3c4c808bbc67e316a8cc6be80e68abae13ac029918')
+        exportdb('hunthub', 'pass')
     elif args.command == 'convert':
         json_to_csv(json_file=args.input, csv_file=args.output)
 
