@@ -13,9 +13,7 @@ def importdb(username, password):
 def exportdb(username, password):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        print(1)
         com=f"mongodump --host localhost --port 27017 --db scopes --out . --username {username} --password {password} --authenticationDatabase scopes"
-        print(1)
         os.system(com)
     except Exception as E:
         print(E)
