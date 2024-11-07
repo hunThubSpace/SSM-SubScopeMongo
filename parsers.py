@@ -220,17 +220,17 @@ def create_parser():
     list_ips_parser.add_argument('program', help='Program (use * for all programs)')
     list_ips_parser.add_argument('--cidr', help='Filter by CIDR')
     list_ips_parser.add_argument('--asn', help='Filter by ASN')
-    list_ips_parser.add_argument('--port', type=int, help='Filter by port')  # Port filter
-    list_ips_parser.add_argument('--hostname', help='Filter by hostname')  # Added hostname filter
-    list_ips_parser.add_argument('--domain', help='Filter by domain')  # Added domain filter
-    list_ips_parser.add_argument('--organization', help='Filter by organization')  # Added organization filter
-    list_ips_parser.add_argument('--data', help='Filter by data')  # Added data filter
-    list_ips_parser.add_argument('--ssl', help='Filter by SSL')  # Added ssl filter
-    list_ips_parser.add_argument('--isp', help='Filter by ISP')  # Added ISP filter
-    list_ips_parser.add_argument('--os', help='Filter by OS')  # Added OS filter
-    list_ips_parser.add_argument('--product', help='Filter by product')  # Added product filter
-    list_ips_parser.add_argument('--version', help='Filter by version')  # Added version filter
-    list_ips_parser.add_argument('--cves', help='Filter by CVEs')  # Added CVEs filter
+    list_ips_parser.add_argument('--port', type=int, help='Filter by port')
+    list_ips_parser.add_argument('--hostname', help='Filter by hostname')
+    list_ips_parser.add_argument('--domain', help='Filter by domain')
+    list_ips_parser.add_argument('--organization', help='Filter by organization')
+    list_ips_parser.add_argument('--data', help='Filter by data')
+    list_ips_parser.add_argument('--ssl', help='Filter by SSL')
+    list_ips_parser.add_argument('--isp', help='Filter by ISP')
+    list_ips_parser.add_argument('--os', help='Filter by OS')
+    list_ips_parser.add_argument('--product', help='Filter by product')
+    list_ips_parser.add_argument('--version', help='Filter by version')
+    list_ips_parser.add_argument('--cves', help='Filter by CVEs')
     list_ips_parser.add_argument('--brief', action='store_true', help='Show only IP addresses')
     list_ips_parser.add_argument('--create_time', help='Filter by creation time')
     list_ips_parser.add_argument('--update_time', help='Filter by update time')
@@ -239,30 +239,30 @@ def create_parser():
     list_ips_parser.add_argument('--stats-cidr', action='store_true', help='Show statistics by CIDR')
     list_ips_parser.add_argument('--stats-asn', action='store_true', help='Show statistics by ASN')
     list_ips_parser.add_argument('--stats-port', action='store_true', help='Show statistics by port')
-    list_ips_parser.add_argument('--stats-isp', action='store_true', help='Show statistics by ISP')  # Added ISP stats
-    list_ips_parser.add_argument('--stats-os', action='store_true', help='Show statistics by OS')  # Added OS stats
-    list_ips_parser.add_argument('--stats-product', action='store_true', help='Show statistics by product')  # Added Product stats
-    list_ips_parser.add_argument('--stats-version', action='store_true', help='Show statistics by version')  # Added Version stats
-    list_ips_parser.add_argument('--stats-cves', action='store_true', help='Show statistics by CVEs')  # Added CVEs stats
+    list_ips_parser.add_argument('--stats-isp', action='store_true', help='Show statistics by ISP')
+    list_ips_parser.add_argument('--stats-os', action='store_true', help='Show statistics by OS')
+    list_ips_parser.add_argument('--stats-product', action='store_true', help='Show statistics by product')
+    list_ips_parser.add_argument('--stats-version', action='store_true', help='Show statistics by version')
+    list_ips_parser.add_argument('--stats-cves', action='store_true', help='Show statistics by CVEs')
 
     delete_ip_parser = ip_action_parser.add_parser('delete', help='Delete IPs')
-    delete_ip_parser.add_argument('ip', help='IP or CIDR (use * for all IPs)')  # Specify IP or CIDR
-    delete_ip_parser.add_argument('program', help='Program (use * for all programs)')  # Specify program
-    delete_ip_parser.add_argument('--port', type=int, help='Filter by port')  # Optional port filter
-    delete_ip_parser.add_argument('--asn', help='Filter by ASN')  # Optional ASN filter
-    delete_ip_parser.add_argument('--cidr', help='Filter by CIDR')  # Optional CIDR filter
-    delete_ip_parser.add_argument('--cves', help='Filter by CVEs')  # Optional CVEs filter
-    delete_ip_parser.add_argument('--hostname', help='Filter by hostname')  # Optional hostname filter
-    delete_ip_parser.add_argument('--domain', help='Filter by domain')  # Optional domain filter
-    delete_ip_parser.add_argument('--organization', help='Filter by organization')  # Optional organization filter
-    delete_ip_parser.add_argument('--data', help='Filter by data')  # Optional data filter
-    delete_ip_parser.add_argument('--ssl', help='Filter by SSL')  # Optional SSL filter
-    delete_ip_parser.add_argument('--isp', help='Filter by ISP')  # Optional ISP filter
-    delete_ip_parser.add_argument('--os', help='Filter by OS')  # Optional OS filter
-    delete_ip_parser.add_argument('--product', help='Filter by product')  # Optional product filter
-    delete_ip_parser.add_argument('--version', help='Filter by version')  # Optional version filter
+    delete_ip_parser.add_argument('ip', help='IP or CIDR (use * for all IPs)')
+    delete_ip_parser.add_argument('program', help='Program (use * for all programs)')
+    delete_ip_parser.add_argument('--port', type=int, help='Filter by port')
+    delete_ip_parser.add_argument('--asn', help='Filter by ASN')
+    delete_ip_parser.add_argument('--cidr', help='Filter by CIDR')
+    delete_ip_parser.add_argument('--cves', help='Filter by CVEs')
+    delete_ip_parser.add_argument('--hostname', help='Filter by hostname')
+    delete_ip_parser.add_argument('--domain', help='Filter by domain')
+    delete_ip_parser.add_argument('--organization', help='Filter by organization')
+    delete_ip_parser.add_argument('--data', help='Filter by data')
+    delete_ip_parser.add_argument('--ssl', help='Filter by SSL')
+    delete_ip_parser.add_argument('--isp', help='Filter by ISP')
+    delete_ip_parser.add_argument('--os', help='Filter by OS')
+    delete_ip_parser.add_argument('--product', help='Filter by product')
+    delete_ip_parser.add_argument('--version', help='Filter by version')
 
-    setup_parser = sub_parser.add_parser('setup', help='Installing mondodb and enable authentication')
+    setup_parser = sub_parser.add_parser('setup', help='Installing mongodb and enable authentication')
     import_parser = sub_parser.add_parser('importdb', help='Import database')
     export_parser = sub_parser.add_parser('exportdb', help='Export database')
     
