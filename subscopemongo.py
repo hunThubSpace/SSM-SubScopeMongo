@@ -1,5 +1,4 @@
 import os
-import sys
 from parsers import create_parser
 
 from setup import setup
@@ -97,11 +96,23 @@ def main():
                     domain=args.domain, organization=args.organization, data=args.data, ssl=args.ssl, isp=args.isp, os=args.os, version=args.version)
             
     elif args.command == 'setup':
-        setup()
-    elif args.command == 'import':
-        importdb('hunthub', 'pass')
-    elif args.command == 'export':
-        exportdb('hunthub', 'pass')
+        with open('auth.txt', 'r') as file:
+            auth_line = file.readline().strip()
+        user, password = auth_line.split(':')
+        setup(user, password)
+        
+    elif args.command == 'importdb':
+        with open('auth.txt', 'r') as file:
+            auth_line = file.readline().strip()
+        user, password = auth_line.split(':')
+        importdb(user, password)
+        
+    elif args.command == 'exportdb':
+        with open('auth.txt', 'r') as file:
+            auth_line = file.readline().strip()
+        user, password = auth_line.split(':')
+        exportdb(user, password)
+        
     elif args.command == 'convert':
         json_to_csv(json_file=args.input, csv_file=args.output)
 

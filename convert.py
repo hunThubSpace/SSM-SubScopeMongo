@@ -3,7 +3,7 @@ import csv
 
 def json_to_csv(json_file, csv_file):
     """
-    Convert a JSON file to a CSV file.
+    Convert a JSON file to a CSV file based on various dataset structures.
 
     Parameters:
     json_file (str): The path to the input JSON file.
@@ -16,31 +16,32 @@ def json_to_csv(json_file, csv_file):
         # Load the JSON data
         json_data = json.loads(data)
 
-        # Extract the list from the 'domains' key
-        if "domains" in json_data:
-            data = json_data["domains"]
+        # Handle different sections of the JSON data based on keys
+        if "programs" in json_data:
+            # Process the 'programs' data
+            programs_data = json_data["programs"]
+            process_programs_data(programs_data, csv_file)
+
+        elif "domains" in json_data:
+            # Process the 'domains' data
+            domains_data = json_data["domains"]
+            process_domains_data(domains_data, csv_file)
+
+        elif isinstance(json_data, list):
+            # Check if it's a list of subdomains/ips/urls and process accordingly
+            if "source" in json_data[3]:
+                process_subdomains_data(json_data, csv_file)
+            elif "ip" in json_data[0]:
+                process_ips_data(json_data, csv_file)
+            elif "url" in json_data[0]:  # Check for URL-related data
+                process_urls_data(json_data, csv_file)
+            else:
+                print("Error: Unknown data format in list.")
+                return
+
         else:
-            print("Error: 'domains' key not found in JSON data.")
+            print("Error: Unrecognized data format.")
             return
-
-        # Check if data is a list
-        if not isinstance(data, list) or len(data) == 0:
-            print("Error: JSON data is not a non-empty list.")
-            return
-
-        # Open the CSV file for writing
-        with open(csv_file, mode='w', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-
-            # Write header row
-            headers = data[0].keys()
-            writer.writerow(headers)
-
-            # Write the data rows
-            for item in data:
-                writer.writerow(item.values())
-
-        print(f'CSV file created: {csv_file}')
 
     except FileNotFoundError:
         print(f"Error: The file {json_file} does not exist.")
@@ -48,3 +49,119 @@ def json_to_csv(json_file, csv_file):
         print("Error: Failed to decode JSON. Please check the file content.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
+def process_programs_data(programs_data, csv_file):
+    """
+    Process the 'programs' section of the JSON and write to CSV.
+
+    Parameters:
+    programs_data (list): List of program data.
+    csv_file (str): The path to the output CSV file.
+    """
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write header row
+        headers = ["program", "domains", "subdomains", "urls", "ips", "created_at"]
+        writer.writerow(headers)
+
+        # Write the data rows
+        for item in programs_data:
+            writer.writerow([item["program"], item["domains"], item["subdomains"], item["urls"], item["ips"], item["created_at"]])
+
+    print(f'CSV file created for programs: {csv_file}')
+
+
+def process_domains_data(domains_data, csv_file):
+    """
+    Process the 'domains' section of the JSON and write to CSV.
+
+    Parameters:
+    domains_data (list): List of domain data.
+    csv_file (str): The path to the output CSV file.
+    """
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write header row
+        headers = ["domain", "program", "scope", "subdomains", "urls", "created_at", "updated_at"]
+        writer.writerow(headers)
+
+        # Write the data rows
+        for item in domains_data:
+            writer.writerow([item["domain"], item["program"], item["scope"], item["subdomains"], item["urls"], item["created_at"], item["updated_at"]])
+
+    print(f'CSV file created for domains: {csv_file}')
+
+
+def process_subdomains_data(subdomains_data, csv_file):
+    """
+    Process the subdomains data and write to CSV.
+
+    Parameters:
+    subdomains_data (list): List of subdomain data.
+    csv_file (str): The path to the output CSV file.
+    """
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write header row
+        headers = ["subdomain", "domain", "program", "source", "scope", "urls", "resolved", "ip_address", "cdn_status", "cdn_name", "created_at", "updated_at"]
+        writer.writerow(headers)
+
+        # Write the data rows
+        for item in subdomains_data:
+            writer.writerow([item["subdomain"], item["domain"], item["program"], item["source"], item["scope"],
+                             item["urls"], item["resolved"], item["ip_address"], item["cdn_status"],
+                             item["cdn_name"], item["created_at"], item["updated_at"]])
+
+    print(f'CSV file created for subdomains: {csv_file}')
+
+
+def process_ips_data(ips_data, csv_file):
+    """
+    Process the IPs data and write to CSV.
+
+    Parameters:
+    ips_data (list): List of IP data.
+    csv_file (str): The path to the output CSV file.
+    """
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write header row
+        headers = ["ip", "program", "cidr", "asn", "port", "hostname", "domain", "organization", "data", "ssl", "isp", "os", "product", "version", "cves", "created_at", "updated_at"]
+        writer.writerow(headers)
+
+        # Write the data rows
+        for item in ips_data:
+            writer.writerow([item["ip"], item["program"], item["cidr"], item["asn"], item["port"], item["hostname"],
+                             item["domain"], item["organization"], item["data"], item["ssl"], item["isp"],
+                             item["os"], item["product"], item["version"], item["cves"], item["created_at"], item["updated_at"]])
+
+    print(f'CSV file created for IPs: {csv_file}')
+
+
+def process_urls_data(urls_data, csv_file):
+    """
+    Process the URLs data and write to CSV.
+
+    Parameters:
+    urls_data (list): List of URL data.
+    csv_file (str): The path to the output CSV file.
+    """
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write header row
+        headers = ["url", "subdomain", "domain", "program", "scheme", "method", "port", "path", "flag", "status_code", "scope", "content_length", "ip_address", "cdn_status", "cdn_name", "title", "webserver", "webtech", "cname", "location", "created_at", "updated_at"]
+        writer.writerow(headers)
+
+        # Write the data rows
+        for item in urls_data:
+            writer.writerow([item["url"], item["subdomain"], item["domain"], item["program"], item["scheme"], item["method"], item["port"], item["path"], item["flag"],
+                             item["status_code"], item["scope"], item["content_length"], item["ip_address"], item["cdn_status"], item["cdn_name"], item["title"], item["webserver"],
+                             item["webtech"], item["cname"], item["location"], item["created_at"], item["updated_at"]])
+
+    print(f'CSV file created for URLs: {csv_file}')

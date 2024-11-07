@@ -1,9 +1,6 @@
 import os
-from datetime import datetime
-from colorama import Fore, Style, Back
 
-def setup():
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def setup(user, password):
     try:
         # install pymongo
         com=f"pip install pymongo bson --break-system-packages"
@@ -36,10 +33,11 @@ def setup():
 
         # add authentication
         com = (
-            'mongosh scopes --eval '
-            '\'db.createUser({ user: "hunthub", pwd: "pass", roles: [{ role: "readWrite", db: "scopes" }] })\''
+            f'mongosh scopes --eval '
+            f"'db.createUser({{ user: \"{user}\", pwd: \"{password}\", roles: [{{ role: \"readWrite\", db: \"scopes\" }}] }})'"
         )
         os.system(com)
+        
     except Exception as E:
         print(E)
 

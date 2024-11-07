@@ -1,40 +1,37 @@
 import argparse
 
 def create_parser():
-    parser = argparse.ArgumentParser(description='Manage programs, domains, subdomains, and IPs')
+    parser = argparse.ArgumentParser(description='Manage programs, domains, subdomains, and IPs')    
     sub_parser = parser.add_subparsers(dest='command')
 
     # program commands
-    program_parser = sub_parser.add_parser('program', help='Manage programs')
+    program_parser = sub_parser.add_parser('program', help='Manage programs or companies')
     program_action_parser = program_parser.add_subparsers(dest='action')
 
-    program_action_parser.add_parser('add', help='add a new program').add_argument('program', help='Name of the program')
+    program_action_parser.add_parser('add', help='add a program').add_argument('program', help='Program name (for example tesla)')
 
     list_programs_parser = program_action_parser.add_parser('list', help='List programs')
-    list_programs_parser.add_argument('program', help="program name or wildcard '*' for all programs")
+    list_programs_parser.add_argument('program', help="program name or wildcard '*' for listing all programs")
     list_programs_parser.add_argument('--brief', action='store_true', help='Show only program names')
     list_programs_parser.add_argument('--count', action='store_true', help='Count the number of returned records')
 
-
     delete_programs_parser = program_action_parser.add_parser('delete', help='Delete a program')
-    delete_programs_parser.add_argument('program', help='Name of the program')
-    delete_programs_parser.add_argument('--all', action='store_true', help='Delete all data related to the program')
-
+    delete_programs_parser.add_argument('program', help='Program name')
+    delete_programs_parser.add_argument('--all', action='store_true', help='Delete all data related to the program (for example domains, subdomains and IPs)')
 
     # Domain commands
     domain_parser = sub_parser.add_parser('domain', help='Manage domains in a program')
     domain_action_parser = domain_parser.add_subparsers(dest='action')
 
-    add_domain_parser = domain_action_parser.add_parser('add', help='Add a domain')
+    add_domain_parser = domain_action_parser.add_parser('add', help='Add a domain to a program')
     add_domain_parser.add_argument('domain', help='Domain name')
     add_domain_parser.add_argument('program', help='Program name')
-    add_domain_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Scope of the domain (leave empty to keep current scope)')
-
+    add_domain_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Scope of the domain [default: inscope]')
 
     list_domains_parser = domain_action_parser.add_parser('list', help='List domains in a program')
-    list_domains_parser.add_argument('domain', help='Domain name (use "*" for all domains)')
-    list_domains_parser.add_argument('program', help='program name (use "*" for all programs)')
-    list_domains_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Filter domains by scope')
+    list_domains_parser.add_argument('domain', help='Domain name (use wildcard "*" for all domains)')
+    list_domains_parser.add_argument('program', help='program name (use wildcard "*" for all programs)')
+    list_domains_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Filter domains by scope [inscope or outscope]')
     list_domains_parser.add_argument('--brief', action='store_true', help='Show only domain names')
     list_domains_parser.add_argument('--count', action='store_true', help='Count the number of returned records')
 
@@ -42,7 +39,7 @@ def create_parser():
     delete_domain_parser = domain_action_parser.add_parser('delete', help='Delete a domain')
     delete_domain_parser.add_argument('domain', help='Domain name')
     delete_domain_parser.add_argument('program', help='program name')
-    delete_domain_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Scope of the domain (default: inscope)')
+    delete_domain_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Scope of the domain [default: inscope]')
 
     # Subdomain commands
     subdomain_parser = sub_parser.add_parser('subdomain', help='Manage subdomains in a program')
@@ -52,9 +49,9 @@ def create_parser():
     add_subdomain_parser.add_argument('subdomain', help='Subdomain name')
     add_subdomain_parser.add_argument('domain', help='Domain name')
     add_subdomain_parser.add_argument('program', help='program name')
-    add_subdomain_parser.add_argument('--source', nargs='*', help='Source(s) (comma-separated)')
+    add_subdomain_parser.add_argument('--source', nargs='*', help='Source(s) to finding subdomains (comma-separated), for example subfinder')
     add_subdomain_parser.add_argument('--unsource', nargs='*', help='Source(s) to remove (comma-separated)')
-    add_subdomain_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Scope')
+    add_subdomain_parser.add_argument('--scope', choices=['inscope', 'outscope'], help='Scope, default inscope')
     add_subdomain_parser.add_argument('--resolved', choices=['yes', 'no'], help='Resolved status')
     add_subdomain_parser.add_argument('--ip', help='IP address of the subdomain')
     add_subdomain_parser.add_argument('--unip', action='store_true', help='Remove IP address from the subdomain')

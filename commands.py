@@ -6,8 +6,11 @@ from pymongo import MongoClient, ASCENDING
 from colorama import Fore, Style, Back
 from datetime import datetime, timedelta
 
+with open('auth.txt', 'r') as file:
+    auth_line = file.readline().strip()
+user, password = auth_line.split(':')
 
-client = MongoClient('mongodb://hunthub:pass@localhost:27017/scopes')
+client = MongoClient(f'mongodb://{user}:{password}@localhost:27017/scopes')
 #client = MongoClient('localhost', 27017)  # Adjust as needed
 
 db = client['scopes']
