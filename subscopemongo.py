@@ -1,6 +1,6 @@
 import os
-from parsers import create_parser
 
+from parsers import create_parser
 from setup import setup
 from import_export import importdb, exportdb
 from convert import json_to_csv
@@ -94,12 +94,6 @@ def main():
         elif args.action == 'delete':
             delete_ip(ip=args.ip, program=args.program, asn=args.asn, cidr=args.cidr, port=args.port, cves=args.cves, hostname=args.hostname,
                     domain=args.domain, organization=args.organization, data=args.data, ssl=args.ssl, isp=args.isp, os=args.os, version=args.version)
-            
-    elif args.command == 'setup':
-        with open('auth.txt', 'r') as file:
-            auth_line = file.readline().strip()
-        user, password = auth_line.split(':')
-        setup(user, password)
         
     elif args.command == 'importdb':
         with open('auth.txt', 'r') as file:
