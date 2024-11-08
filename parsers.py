@@ -262,7 +262,6 @@ def create_parser():
     delete_ip_parser.add_argument('--product', help='Filter by product')
     delete_ip_parser.add_argument('--version', help='Filter by version')
 
-    setup_parser = sub_parser.add_parser('setup', help='Installing mongodb and enable authentication')
     import_parser = sub_parser.add_parser('importdb', help='Import database')
     export_parser = sub_parser.add_parser('exportdb', help='Export database')
     
