@@ -1,13 +1,8 @@
 import os
+from pymongo import MongoClient
 
 def setup(user, password):
-    try:
-        # install pymongo
-        com=f"pip install pymongo bson --break-system-packages"
-        os.system(com)
-        
-        from pymongo import MongoClient
-        
+    try:                
         # update packages
         com=f"sudo apt update"
         os.system(com)
@@ -41,3 +36,8 @@ def setup(user, password):
     except Exception as E:
         print(E)
 
+if __name__ == "__main__":
+    with open('auth.txt', 'r') as file:
+            auth_line = file.readline().strip()
+    user, password = auth_line.split(':')
+    setup(user, password)
