@@ -1,7 +1,6 @@
 import re
 import os
 import json
-from datetime import datetime
 from pymongo import MongoClient, ASCENDING
 from colorama import Fore, Style, Back
 from datetime import datetime, timedelta
@@ -11,7 +10,6 @@ with open('auth.txt', 'r') as file:
 user, password = auth_line.split(':')
 
 client = MongoClient(f'mongodb://{user}:{password}@localhost:27017/scopes')
-#client = MongoClient('localhost', 27017)  # Adjust as needed
 
 db = client['scopes']
 programs_collection = db['programs']
@@ -20,10 +18,7 @@ subdomains_collection = db['subdomains']
 urls_collection = db['urls']
 cidrs_collection = db['cidrs']
 
-cidrs_collection.create_index(
-    [("ip", ASCENDING), ("program", ASCENDING), ("port", ASCENDING)],  # Fields to index
-    unique=True  # Ensures the combination is unique
-)
+cidrs_collection.create_index([("ip", ASCENDING), ("program", ASCENDING), ("port", ASCENDING)], unique=True)
 
 def update_counts_program(program):
     collections = {'domains': domains_collection,'subdomains': subdomains_collection,'urls': urls_collection,'ips': cidrs_collection,}
@@ -127,7 +122,7 @@ def list_programs(program='*', brief=False, count=False):
                 print(ws['program'])  # Print each program name in brief mode
         else:
             # Detailed mode: print program with created_at, domain count, subdomain count, URL count, and IP count as JSON
-            print(json.dumps({"programs": programs}, indent=4))
+            print(json.dumps(programs, indent=4))  # Directly output the list of programs
 
     except Exception as e:
         print(f"{Fore.RED}error{Style.RESET_ALL} | listing programs | error: {e}")
@@ -293,7 +288,7 @@ def list_domains(domain='*', program='*', brief=False, count=False, scope=None):
         for domain in domains:
             print(domain['domain'])  # Print only the domain name
     else:
-        print(json.dumps({"domains": domains}, indent=4))
+        print(json.dumps(domains, indent=4))  # Directly output the list of programs
 
 def delete_domain(domain='*', program='*', scope=None):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # For potential logging
