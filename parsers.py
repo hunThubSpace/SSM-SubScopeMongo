@@ -98,7 +98,7 @@ def create_parser():
     delete_subdomain_parser.add_argument('--cdn_name', help='Filter by CDN provider name')
 
     # url commands
-    url_parser = sub_parser.add_parser('url', help='Manage urls')
+    url_parser = sub_parser.add_parser('url', help='Manage urls in a program')
     live_action_parser = url_parser.add_subparsers(dest='action')
 
     add_url_parser = live_action_parser.add_parser('add', help='Add a live subdomain')
@@ -262,8 +262,8 @@ def create_parser():
     delete_ip_parser.add_argument('--product', help='Filter by product')
     delete_ip_parser.add_argument('--version', help='Filter by version')
 
-    import_parser = sub_parser.add_parser('importdb', help='Import database')
-    export_parser = sub_parser.add_parser('exportdb', help='Export database')
+    import_parser = sub_parser.add_parser('importdb', help='Import database [scopes directory]')
+    export_parser = sub_parser.add_parser('exportdb', help='Export database [scopes directory]')
     
     convert_parser = sub_parser.add_parser('convert', help='convert json to csv')
     convert_parser.add_argument('input', help='json file')
