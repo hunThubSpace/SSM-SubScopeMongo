@@ -1,7 +1,6 @@
 import os
 
 from parsers import create_parser
-from setup import setup
 from import_export import importdb, exportdb
 from convert import json_to_csv
 from commands import (
@@ -12,6 +11,10 @@ from commands import (
 def main():
     parser = create_parser()
     args = parser.parse_args()
+    
+    with open('auth.txt', 'r') as file:
+            auth_line = file.readline().strip()
+    user, password = auth_line.split(':')
 
     # Handle commands
     if args.command == 'program':
@@ -96,19 +99,16 @@ def main():
                     domain=args.domain, organization=args.organization, data=args.data, ssl=args.ssl, isp=args.isp, os=args.os, version=args.version)
         
     elif args.command == 'importdb':
-        with open('auth.txt', 'r') as file:
-            auth_line = file.readline().strip()
-        user, password = auth_line.split(':')
         importdb(user, password)
         
     elif args.command == 'exportdb':
-        with open('auth.txt', 'r') as file:
-            auth_line = file.readline().strip()
-        user, password = auth_line.split(':')
         exportdb(user, password)
         
     elif args.command == 'convert':
         json_to_csv(json_file=args.input, csv_file=args.output)
+
+    else:
+        print("\ /--\ /    You    \ /--\ /\n/ \__/ \    know   / \__/ \ \n\_/--\_/    for    \_/--\_/ \n/ \__/ \\  organize / \__/ \\ \n")
 
 if __name__ == "__main__":
     main()
