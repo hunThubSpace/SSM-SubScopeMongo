@@ -16,25 +16,27 @@ def json_to_csv(json_file, csv_file):
         # Load the JSON data
         json_data = json.loads(data)
 
-        # Handle different sections of the JSON data based on keys
-        if "programs" in json_data:
-            # Process the 'programs' data
-            programs_data = json_data["programs"]
-            process_programs_data(programs_data, csv_file)
-
-        elif "domains" in json_data:
-            # Process the 'domains' data
-            domains_data = json_data["domains"]
-            process_domains_data(domains_data, csv_file)
-
-        elif isinstance(json_data, list):
-            # Check if it's a list of subdomains/ips/urls and process accordingly
-            if "source" in json_data[3]:
+        if isinstance(json_data, list):
+            # program
+            if "domains" in json_data[0]:
+                process_programs_data(json_data, csv_file)
+            
+            # domain
+            elif "scope" in json_data[0] and "subdomains" in json_data[0]:
+                process_domains_data(json_data, csv_file)
+                
+            # subdomains
+            elif "source" in json_data[0]:
                 process_subdomains_data(json_data, csv_file)
-            elif "ip" in json_data[0]:
-                process_ips_data(json_data, csv_file)
-            elif "url" in json_data[0]:  # Check for URL-related data
+            
+            # url
+            elif "scheme" in json_data[0]:
                 process_urls_data(json_data, csv_file)
+            
+            # cidrs
+            elif "asn" in json_data[0]:
+                process_ips_data(json_data, csv_file)
+            
             else:
                 print("Error: Unknown data format in list.")
                 return
