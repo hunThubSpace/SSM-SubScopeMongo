@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-from colorama import Fore, Style, Back
 
 def importdb(username, password):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
