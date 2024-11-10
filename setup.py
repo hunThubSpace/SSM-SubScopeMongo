@@ -1,4 +1,5 @@
 import os
+import sys
 from pymongo import MongoClient
 
 def setup(user, password):
@@ -37,7 +38,13 @@ def setup(user, password):
         print(E)
 
 if __name__ == "__main__":
-    with open('auth.txt', 'r') as file:
-            auth_line = file.readline().strip()
-    user, password = auth_line.split(':')
+    auth_line = os.getenv('ssm_cred')
+    if not auth_line:
+        print("Error: The 'ssm_cred' environment variable is not set.")
+        sys.exit(1)
+    try:
+        user, password = auth_line.split(':')
+    except ValueError:
+        print("Error: The 'ssm_cred' environment variable must be in the format 'user:pass'.")
+        sys.exit(1)
     setup(user, password)
