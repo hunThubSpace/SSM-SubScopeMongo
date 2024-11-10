@@ -1,4 +1,6 @@
-![logoo](https://github.com/user-attachments/assets/e019dd1e-4c30-4cd9-8b68-1d91249810e8)
+<div align=center>
+ <img src="https://github.com/user-attachments/assets/7ea510c6-dc2e-4e35-b4a8-23635980582f">
+</div>
 
 # SubScopeMongo
 
