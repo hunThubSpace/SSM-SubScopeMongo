@@ -23,10 +23,10 @@ git clone https://github.com/hunThubSpace/SubScopeMongo.git && cd SubScopeMongo
 pip install -r requirements.txt
 ```
 
-3. Add your desired credential in `auth.txt`
+3. Add your desired credential in environment variable (ssm_cred)
 
 ```bash
-user:pass
+export ssm_cred=user:pass
 ```
 
 4. Run the setup.py for installing MongoDB database and set your credentials on DB
