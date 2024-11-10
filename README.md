@@ -1,3 +1,5 @@
+![logo](https://github.com/user-attachments/assets/e86d2d32-d7f5-498c-bc8d-4e3a8b2d53c7)
+
 # SubScopeMongo
 
 **SubScopeMongo** is a Python-based command-line tool (like SubScope) but in MongoDB database.
