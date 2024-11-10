@@ -1,4 +1,4 @@
-![logo](https://github.com/user-attachments/assets/e86d2d32-d7f5-498c-bc8d-4e3a8b2d53c7)
+![logoo](https://github.com/user-attachments/assets/e019dd1e-4c30-4cd9-8b68-1d91249810e8)
 
 # SubScopeMongo
 
