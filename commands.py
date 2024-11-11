@@ -5,9 +5,15 @@ from pymongo import MongoClient, ASCENDING
 from colorama import Fore, Style, Back
 from datetime import datetime, timedelta
 
-with open('auth.txt', 'r') as file:
-    auth_line = file.readline().strip()
-user, password = auth_line.split(':')
+auth_line = os.getenv('ssm_cred')
+if not auth_line:
+    print("Error: The 'ssm_cred' environment variable is not set.")
+    sys.exit(1)
+try:
+    user, password = auth_line.split(':')
+except ValueError:
+    print("Error: The 'ssm_cred' environment variable must be in the format 'user:pass'.")
+    sys.exit(1)
 
 client = MongoClient(f'mongodb://{user}:{password}@localhost:27017/scopes')
 
