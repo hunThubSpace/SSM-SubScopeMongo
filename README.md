@@ -11,4 +11,4 @@
 - Installed MongoDB
 
 ## Documentation
-For working with this tool, please read the documentation [Click Here](https://hunthub.notion.site/SubScopeMongo-SSM-13c00baec21080ae87dcf53e466d54fc)
+For working with this tool, please read the documentation: [Documentation](https://hunthub.notion.site/SubScopeMongo-SSM-13c00baec21080ae87dcf53e466d54fc)
