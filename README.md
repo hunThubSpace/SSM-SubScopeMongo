@@ -4,7 +4,7 @@
 
 # SubScopeMongo
 
-**SubScopeMongo** is a Python-based command-line tool (like SubScope) but in MongoDB database.
+**SubScopeMongo (SSM)** is a recon framework designed to organize assets for penetration testing and bug bounty programs. It uses MongoDB as its database and is written in Python.
 
 ## Requirements
 - Python 3.x
