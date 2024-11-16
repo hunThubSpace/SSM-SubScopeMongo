@@ -24,16 +24,20 @@ except ValueError:
     print("Error: The 'ssm_cred' environment variable must be in the format 'user:pass'.")
     sys.exit(1)
 
-client = MongoClient(f'mongodb://{user}:{password}@localhost:27017/scopes')
+try:
+    client = MongoClient(f'mongodb://{user}:{password}@localhost:27017/scopes')
 
-db = client['scopes']
-programs_collection = db['programs']
-domains_collection = db['domains']
-subdomains_collection = db['subdomains']
-urls_collection = db['urls']
-cidrs_collection = db['cidrs']
-
-cidrs_collection.create_index([("ip", ASCENDING), ("program", ASCENDING), ("port", ASCENDING)], unique=True)
+    db = client['scopes']
+    programs_collection = db['programs']
+    domains_collection = db['domains']
+    subdomains_collection = db['subdomains']
+    urls_collection = db['urls']
+    cidrs_collection = db['cidrs']
+    cidrs_collection.create_index([("ip", ASCENDING), ("program", ASCENDING), ("port", ASCENDING)], unique=True)
+    
+except Exception as E:
+    print("Coonection refused. run 'python3 setup.py' for installing all requirements")
+    sys.exit(1)
 
 def update_counts_program(program):
     collections = {'domains': domains_collection,'subdomains': subdomains_collection,'urls': urls_collection,'ips': cidrs_collection,}
