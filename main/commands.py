@@ -36,7 +36,7 @@ try:
     cidrs_collection.create_index([("ip", ASCENDING), ("program", ASCENDING), ("port", ASCENDING)], unique=True)
     
 except Exception as E:
-    print("Conection refused. run 'python3 setup.py' for installing all requirements")
+    print("Connection refused. run 'python3 setup.py' for installing all requirements")
     sys.exit(1)
 
 def update_counts_program(program):
