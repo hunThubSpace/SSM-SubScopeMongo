@@ -2,7 +2,7 @@
  <img src="https://github.com/user-attachments/assets/7ea510c6-dc2e-4e35-b4a8-23635980582f">
 </div>
 
-# SubScopeMongo
+# SubScopeMongo (SSM)
 
 **SubScopeMongo (SSM)** is a recon framework designed to organize assets for penetration testing and bug bounty programs. It uses MongoDB as its database and is written in Python.
 
