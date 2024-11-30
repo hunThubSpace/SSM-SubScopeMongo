@@ -45,7 +45,7 @@ def resfile_gen():
         for resolver in resolvers:
             file.write(resolver + "\n")
 
-def run_jhaddix(domains):
+def run_chaos(domains):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp} |{Back.YELLOW}{Fore.BLACK}   job   {Style.RESET_ALL}| Fetching and remove duplicate lines from chaos wordlist")
     bb_chaos_download_and_extract()
