@@ -3,4 +3,4 @@ pymongo
 colorama
 argparse
 requests
-
+pycrtsh
